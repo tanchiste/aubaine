@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -188,7 +189,7 @@ export const slots = pgTable(
     isOpen: boolean('is_open').notNull().default(true),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
-  (t) => [index('slots_venue_start_idx').on(t.venueId, t.startsAt), index('slots_start_idx').on(t.startsAt)],
+  (t) => [uniqueIndex('slots_venue_start_uniq').on(t.venueId, t.startsAt), index('slots_start_idx').on(t.startsAt)],
 );
 
 export const bookings = pgTable(

@@ -8,10 +8,12 @@ import { IconBack } from '@/components/icons';
 import { euros, longDate, brusselsDate, timeLabel } from '@/lib/format';
 import { quote } from '@/lib/pricing';
 import { firstPhotos } from '@/lib/venues';
+import { getCurrentUser } from '@/lib/auth';
+import { BookForm } from './BookForm';
 
 export const metadata = { title: 'Ta réservation' };
 
-/** Récapitulatif de la réservation. Le paiement et la confirmation arrivent à l'étape suivante. */
+/** Récapitulatif et confirmation de la réservation (paiement simulé pendant la phase de test) */
 export default async function BookingPage({ searchParams }: { searchParams: Promise<{ slot?: string; n?: string }> }) {
   const sp = await searchParams;
   if (!sp.slot || !/^[0-9a-f-]{36}$/i.test(sp.slot)) notFound();
@@ -22,6 +24,7 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
   const price = quote(venue, n, slot.discountPct);
   const photo = (await firstPhotos([venue.id])).get(venue.id);
   const day = brusselsDate(slot.startsAt);
+  const user = await getCurrentUser();
 
   return (
     <div className="section" style={{ paddingTop: 16 }}>
@@ -43,8 +46,17 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
         <div className="row" style={{ justifyContent: 'space-between' }}><dt className="muted">Remise heures creuses (−{slot.discountPct} %)</dt><dd style={{ margin: 0, fontWeight: 600, color: 'var(--deal)' }}>−{euros(price.saved)}</dd></div>
         <div className="row" style={{ justifyContent: 'space-between', fontSize: 18, fontWeight: 800, borderTop: '1px dashed var(--line)', paddingTop: 10 }}><dt>Total</dt><dd style={{ margin: 0 }}>{euros(price.total)}</dd></div>
       </dl>
-      <p className="notice notice-amber">La réservation et le paiement arrivent à la prochaine étape du développement.</p>
-      <button className="btn btn-primary btn-lg btn-block" disabled>Payer {euros(price.total)}</button>
+      {user ? (
+        <BookForm slotId={slot.id} people={n} total={euros(price.total)} needName={!user.firstName} />
+      ) : (
+        <div className="stack" style={{ ['--gap' as string]: '10px' }}>
+          <Link className="btn btn-primary btn-lg btn-block" href={`/connexion?suite=${encodeURIComponent(`/reserver?slot=${slot.id}&n=${n}`)}`}>
+            Continuer
+          </Link>
+          <p className="small muted" style={{ textAlign: 'center' }}>Ton compte se crée avec ton email, sans mot de passe : billet, points et parrainage au même endroit.</p>
+        </div>
+      )}
+      <p className="small muted" style={{ textAlign: 'center' }}>Annulation gratuite jusqu’à 2 h avant.</p>
     </div>
   );
 }

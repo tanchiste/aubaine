@@ -31,13 +31,12 @@ const codeHash = (email: string, code: string) =>
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email({ message: 'Adresse email invalide.' }));
 
 /**
- * Sans service d'email (développement, tests automatiques), le code est affiché à l'écran.
- * Jamais sur la production Vercel.
+ * Sans service d'email (développement, tests, phase de test en ligne), le code est affiché à l'écran.
+ * En production, il faut le demander explicitement avec AUTH_DEV_CODES=1 : n'importe qui peut alors
+ * se connecter avec n'importe quel email, donc à réserver à une adresse qui n'est pas encore partagée.
  */
 export const showDevCode = () =>
-  !process.env.RESEND_API_KEY &&
-  process.env.VERCEL_ENV !== 'production' &&
-  (process.env.NODE_ENV !== 'production' || process.env.AUTH_DEV_CODES === '1');
+  !process.env.RESEND_API_KEY && (process.env.NODE_ENV !== 'production' || process.env.AUTH_DEV_CODES === '1');
 
 export function adminEmails(): string[] {
   return (process.env.ADMIN_EMAILS ?? '')

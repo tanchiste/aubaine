@@ -94,7 +94,63 @@ try {
   ok(await partner.locator('text=Ta fiche est en ligne').isVisible(), 'L’exploitant voit sa fiche en ligne');
   await shot(partner, '05-pro-home');
 
-  // 5. Sécurité : un client ne peut pas ouvrir le back-office
+  // 5. L'exploitant ouvre un créneau dans 1 h (heure de Bruxelles)
+  const inOneHour = new Date(Date.now() + 65 * 60_000);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(inOneHour).map((p) => [p.type, p.value]),
+  );
+  const slotDate = `${parts.year}-${parts.month}-${parts.day}`;
+  const slotTime = `${parts.hour}:${String(Math.floor(Number(parts.minute) / 5) * 5).padStart(2, '0')}`;
+  await partner.goto(`${BASE}/pro/creneaux?date=${slotDate}`);
+  await partner.fill('input[name=date]', slotDate);
+  await partner.fill('input[name=time]', slotTime);
+  await partner.click('form button:has-text("Ouvrir")');
+  await partner.waitForSelector('text=1 créneau ouvert');
+  ok(true, `Créneau ouvert le ${slotDate} à ${slotTime}`);
+  await partner.reload();
+  await shot(partner, '06-pro-creneaux');
+
+  // 6. Un nouveau client réserve (connexion au milieu du parcours)
+  const cctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const buyer = await cctx.newPage();
+  await buyer.goto(`${BASE}/lieu/${slug}?date=${slotDate}&n=4`);
+  await buyer.locator('.slot:not(.full)').first().click();
+  await buyer.click('.sticky-cta a:has-text("Réserver")');
+  await buyer.waitForURL(/\/reserver/);
+  await buyer.click('a:has-text("Continuer")');
+  const buyerEmail = `client.${stamp}@test.be`;
+  await buyer.fill('input[name=email]', buyerEmail);
+  await buyer.click('button:has-text("Recevoir mon code")');
+  const code = (await buyer.locator('[data-testid=dev-code] b').textContent()).trim();
+  await buyer.fill('input[name=code]', code);
+  await buyer.click('button:has-text("Me connecter")');
+  await buyer.waitForURL(/\/reserver/);
+  ok(true, 'Le client revient sur sa réservation après connexion');
+  await shot(buyer, '07-paiement');
+  await buyer.fill('input[name=firstName]', 'Camille');
+  await buyer.click('button:has-text("Payer")');
+  await buyer.waitForURL(/\/billets\//);
+  ok(await buyer.locator('h1:has-text("C’est réservé !")').isVisible(), 'Réservation confirmée, billet affiché');
+  const ticket = (await buyer.locator('[data-testid=ticket-code]').textContent()).trim();
+  ok(/^[A-Z2-9]{6}$/.test(ticket), `Code du billet : ${ticket}`);
+  await shot(buyer, '08-billet');
+  await buyer.goto(`${BASE}/billets`);
+  ok(await buyer.locator(`text=${ticket}`).isVisible(), 'Le billet apparaît dans « Tes billets »');
+
+  // 7. L'exploitant valide l'arrivée avec le code
+  await partner.goto(`${BASE}/pro`);
+  await partner.fill('input[name=code]', ticket.toLowerCase());
+  await partner.click('form button:has-text("Valider")');
+  await partner.waitForSelector('text=Camille validé');
+  ok(true, 'Arrivée validée à l’accueil avec le code');
+  await partner.fill('input[name=code]', ticket);
+  await partner.click('form button:has-text("Valider")');
+  await partner.waitForSelector('text=déjà validé');
+  ok(true, 'Un même code ne peut pas être validé deux fois');
+  await shot(partner, '09-pro-accueil');
+
+  // 8. Sécurité : un client ne peut pas ouvrir le back-office
   const res2 = await partner.goto(`${BASE}/admin`);
   ok(res2.status() === 404, 'Le back-office est fermé aux non-admins');
   console.log('\nTout est bon.');

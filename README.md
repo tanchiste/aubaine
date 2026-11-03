@@ -11,7 +11,7 @@ Les loisirs du Hainaut à prix creux. Une app web pour trois publics :
 | Étape | Contenu | État |
 |---|---|---|
 | 1 | Connexion par code email, rôles, fiche exploitant + photos, validation admin, Explorer et fiche activité | ✅ fait |
-| 2 | Créneaux côté exploitant, réservation (paiement simulé), billet avec code, validation à l'accueil | à faire |
+| 2 | Créneaux côté exploitant, réservation (paiement simulé), billet avec code, validation à l'accueil | ✅ fait |
 | 3 | Remise automatique, points de fidélité, parrainage, favoris et alertes | à faire |
 | 4 | Paiement réel avec Stripe Connect (Bancontact, Apple Pay, carte) et virements aux exploitants | à faire |
 
@@ -35,7 +35,7 @@ npm run db:seed                   # établissements de démonstration (fictifs)
 npm run dev                       # http://localhost:3000
 ```
 
-Sans `RESEND_API_KEY`, le code de connexion s'affiche à l'écran et dans la console : pratique pour développer.
+Sans `RESEND_API_KEY`, le code de connexion s'affiche à l'écran et dans la console : pratique pour développer. En ligne, ce mode de test s'active avec `AUTH_DEV_CODES=1` (n'importe qui peut alors se connecter avec n'importe quel email : à réserver à une adresse non partagée).
 
 Comptes utiles en local :
 - n'importe quel email pour un client ;
@@ -65,7 +65,7 @@ AUTH_DEV_CODES=1 npm start          # dans un terminal
 npm run test:e2e                    # dans un autre
 ```
 
-Le test déroule le parcours complet : un exploitant crée sa fiche et ses photos, l'admin la valide, un client la voit, et le back-office reste fermé aux non-admins.
+Le test déroule le parcours complet : un exploitant crée sa fiche et ses photos, l'admin la valide, l'exploitant ouvre un créneau, un client réserve et reçoit son billet, l'exploitant valide l'arrivée avec le code, et le back-office reste fermé aux non-admins.
 
 ## Organisation du code
 

@@ -5,7 +5,7 @@ import { IconBank, IconClock, IconGrid, IconHome } from './icons';
 
 const ITEMS = [
   { href: '/pro', label: 'Tableau de bord', short: 'Tableau', Icon: IconGrid, exact: true },
-  { href: '/pro/creneaux', label: 'Créneaux', short: 'Créneaux', Icon: IconClock, soon: true },
+  { href: '/pro/creneaux', label: 'Créneaux', short: 'Créneaux', Icon: IconClock },
   { href: '/pro/paiements', label: 'Paiements', short: 'Paiements', Icon: IconBank, soon: true },
   { href: '/pro/etablissement', label: 'Établissement', short: 'Établissement', Icon: IconHome },
 ];

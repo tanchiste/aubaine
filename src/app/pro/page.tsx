@@ -11,6 +11,8 @@ import { getProContext } from '@/lib/pro';
 import { checklist, isReady } from '@/lib/venues';
 import { togglePauseAction } from './actions';
 import { CreateVenueForm } from './CreateVenueForm';
+import { CheckInBox } from './CheckInBox';
+import { checkInIdAction } from './checkin';
 
 export default async function ProHome() {
   const { user, current } = await getProContext();
@@ -122,6 +124,8 @@ export default async function ProHome() {
         </div>
       </section>
 
+      {(v.status === 'published' || v.status === 'paused') && <CheckInBox />}
+
       <section className="card stack" aria-labelledby="arr-title" style={{ padding: '6px 16px' }}>
         <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10 }}>
           <h2 id="arr-title" style={{ fontSize: 15, fontWeight: 800 }}>Arrivées du jour</h2>
@@ -138,7 +142,14 @@ export default async function ProHome() {
                   <b style={{ fontSize: 14 }}>{b.firstName ?? 'Client'}</b>
                   <span className="small muted" style={{ display: 'block' }}>{b.people} pers. · {euros(b.total)} · −{b.discountPct} %</span>
                 </span>
-                {b.status === 'checked_in' ? <span className="pill pill-ok">Arrivé</span> : <span className="pill pill-muted">Attendu</span>}
+                {b.status === 'checked_in' ? (
+                  <span className="pill pill-ok">Arrivé</span>
+                ) : (
+                  <form action={checkInIdAction}>
+                    <input type="hidden" name="bookingId" value={b.id} />
+                    <button className="btn btn-sm" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>Valider</button>
+                  </form>
+                )}
               </li>
             ))}
           </ul>

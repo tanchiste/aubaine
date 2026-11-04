@@ -76,9 +76,12 @@ export default async function VenuePage({ params, searchParams }: Props) {
           <p className="notice notice-amber">Aperçu : cette fiche n’est pas encore visible par les clients.</p>
         )}
         <div className="stack" style={{ ['--gap' as string]: '4px' }}>
-          <span className="small muted" style={{ fontWeight: 600 }}>
-            {cat.label} · {venue.area ? `${venue.area}, ` : ''}
-            {venue.city}
+          <span className="row" style={{ ['--gap' as string]: '8px' }}>
+            <span className="cat-tag soft">{cat.label}</span>
+            <span className="small muted" style={{ fontWeight: 600 }}>
+              {venue.area ? `${venue.area}, ` : ''}
+              {venue.city}
+            </span>
           </span>
           <h1 className="display" style={{ fontSize: 26 }}>
             {venue.name}

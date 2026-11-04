@@ -50,6 +50,20 @@ try {
   await client.goto(BASE + '/');
   ok((await client.locator('.venue-card').count()) > 0, 'Explorer affiche des établissements');
   await shot(client, '01-explorer');
+  ok((await client.locator('.venue-card .cat-tag').count()) > 0, 'Chaque carte affiche son type d’activité');
+
+  // Recherche : le type d'activité est trouvé, avec suggestions pendant la frappe
+  await client.fill('input[aria-label="Rechercher une activité"]', 'kart');
+  await client.waitForSelector('.suggest a:has-text("Kart\'Ohm")');
+  ok(await client.locator('.suggest a:has-text("Karting")').first().isVisible(), 'Suggestions pendant la frappe (« kart » → Karting, Kart’Ohm)');
+  await client.fill('input[aria-label="Rechercher une activité"]', 'karting');
+  await client.waitForSelector('.suggest a:has-text("Kart\'Ohm")');
+  await client.press('input[aria-label="Rechercher une activité"]', 'Enter');
+  await client.waitForURL(/q=karting/);
+  ok((await client.locator('text=Kart\'Ohm').count()) > 0, 'Rechercher « karting » affiche Kart’Ohm');
+  await client.goto(BASE + '/?q=' + encodeURIComponent('spa'));
+  ok((await client.locator('text=Bulle d\'O').count()) > 0, 'Rechercher « spa » trouve le bien-être (sans accent ni mot exact)');
+  await client.goto(BASE + '/');
   await client.locator('.venue-card .venue-link').first().click();
   await client.waitForURL(/\/lieu\//);
   ok((await client.locator('.slot').count()) > 0, 'La fiche affiche des créneaux');

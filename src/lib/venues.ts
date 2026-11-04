@@ -5,6 +5,7 @@ import { venuePhotos, venues, type Venue, type VenueCategory } from '@/db/schema
 import { MAX_DISCOUNT, MIN_DISCOUNT, discounted } from './pricing';
 import { addDays, brusselsHour } from './format';
 import { MOMENTS, type Moment, type Sort } from './params';
+import { matchVenue } from './search';
 
 export type SlotView = { id: string; startsAt: Date; discountPct: number; capacity: number; remaining: number };
 
@@ -80,12 +81,36 @@ async function publishedVenues(f: Filters) {
   const conds = [eq(venues.status, 'published')];
   if (f.category) conds.push(eq(venues.category, f.category));
   if (f.city) conds.push(sql`lower(${venues.city}) = lower(${f.city})`);
-  if (f.q) {
-    const like = `%${f.q.replace(/[%_\\]/g, (m) => '\\' + m)}%`;
-    conds.push(sql`(${venues.name} ilike ${like} or ${venues.city} ilike ${like} or ${venues.area} ilike ${like})`);
-  }
   const list = await db.select().from(venues).where(and(...conds));
-  return list.filter((v) => f.people >= v.groupMin && f.people <= v.groupMax);
+  // Recherche en mémoire : sans accents, sur le nom, le type d'activité, la ville et la description.
+  return list.filter((v) => f.people >= v.groupMin && f.people <= v.groupMax && (!f.q || matchVenue(v, f.q)));
+}
+
+/** Établissements en ligne qui correspondent à une recherche, avec leur prochain créneau et leur meilleure remise sur 7 jours */
+export async function searchVenues(q: string, opts: { people?: number; city?: string; limit?: number } = {}) {
+  const list = (await db.select().from(venues).where(eq(venues.status, 'published')))
+    .filter((v) => matchVenue(v, q))
+    .filter((v) => !opts.city || v.city.toLowerCase() === opts.city.toLowerCase())
+    .filter((v) => !opts.people || (opts.people >= v.groupMin && opts.people <= v.groupMax));
+  if (list.length === 0) return [];
+  const ids = list.map((v) => v.id);
+  const [rows, photos] = await Promise.all([
+    db.execute<{ venue_id: string; next: Date | null; best: number | null }>(sql`
+      select v.id as venue_id,
+        (select min(s.starts_at) from slots s where s.venue_id = v.id and s.is_open and s.starts_at > now()) as next,
+        (select max(s.discount_pct) from slots s where s.venue_id = v.id and s.is_open and s.starts_at > now()
+           and s.starts_at < now() + interval '7 days') as best
+      from venues v where v.id in (${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)})`),
+    firstPhotos(ids),
+  ]);
+  // Les lieux qui ont des créneaux à venir d'abord, puis les plus grosses remises.
+  return list
+    .map((v) => {
+      const r = [...rows].find((x) => x.venue_id === v.id);
+      return { venue: v, photoId: photos.get(v.id) ?? null, next: r?.next ? new Date(r.next) : null, best: r?.best ?? null };
+    })
+    .sort((a, b) => Number(!a.next) - Number(!b.next) || (b.best ?? 0) - (a.best ?? 0) || a.venue.name.localeCompare(b.venue.name, 'fr'))
+    .slice(0, opts.limit ?? 20);
 }
 
 const minPrice = (v: Venue, slots: SlotView[]) => Math.min(...slots.map((s) => discounted(v.priceCents, s.discountPct)));

@@ -416,3 +416,24 @@ p { margin: 0; }
 .perf i { display: block; height: 6px; border-radius: 3px; background: var(--line); margin-top: 4px; position: relative; }
 .perf i::after { content: ''; position: absolute; inset: 0; width: var(--w); border-radius: 3px; background: var(--primary); }
 @media (min-width: 900px) { .perf { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ---------- Suggestions de recherche ---------- */
+.search .suggest {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 45; background: #fff; border-radius: 16px; padding: 6px;
+  box-shadow: 0 14px 40px rgba(23,20,46,0.18); border: 1px solid var(--line-2); max-height: 70vh; overflow-y: auto;
+}
+.search .suggest svg { position: static; transform: none; }
+.suggest a { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px; color: var(--ink); text-decoration: none; }
+.suggest a:hover, .suggest a[aria-selected='true'] { background: var(--soft); color: var(--ink); }
+.suggest a b { font-size: 14px; }
+.suggest-icon { flex: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); }
+.suggest-thumb { flex: none; width: 40px; height: 40px; border-radius: 10px; overflow: hidden; }
+.suggest-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.suggest-empty { padding: 12px; font-size: 14px; color: var(--muted); }
+.suggest-all { width: 100%; margin-top: 4px; padding: 11px; border: 0; border-top: 1px solid var(--line-2); background: none; font: inherit; font-size: 14px; font-weight: 700; color: var(--primary); cursor: pointer; text-align: left; border-radius: 0 0 12px 12px; }
+.suggest-all:hover { background: var(--primary-soft); }
+
+/* ---------- Tag du type d'activité ---------- */
+.cat-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: rgba(255,255,255,0.94); color: var(--ink); font-size: 12px; font-weight: 700; box-shadow: 0 1px 4px rgba(23,20,46,0.12); white-space: nowrap; }
+.art .cat-tag { position: absolute; right: 10px; top: 10px; }
+.cat-tag.soft { background: var(--primary-soft); color: var(--primary-dark); box-shadow: none; }

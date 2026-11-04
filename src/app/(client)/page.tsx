@@ -3,12 +3,13 @@ import { cookies } from 'next/headers';
 import { CityPicker } from '@/components/CityPicker';
 import { DatePicker } from '@/components/DatePicker';
 import { Deal, Logo, VenueArt } from '@/components/ui';
-import { IconBolt, IconMinus, IconPlus, IconSearch } from '@/components/icons';
+import { IconBolt, IconMinus, IconPlus } from '@/components/icons';
+import { SearchBox } from '@/components/SearchBox';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
-import { bestDeals, cities, explorer, lastMinute } from '@/lib/venues';
+import { bestDeals, cities, explorer, lastMinute, searchVenues } from '@/lib/venues';
 
 type SP = Record<string, string | string[] | undefined>;
 
@@ -39,6 +40,9 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     }
   }
 
+  // Recherche : les lieux qui correspondent mais n'ont rien ce jour-là, avec leur prochain créneau.
+  const others = q ? (await searchVenues(q, { people: n, city })).filter((r) => !items.some((i) => i.venue.id === r.venue.id) && (!category || r.venue.category === category)) : [];
+
   const base = {
     date: date !== today ? date : undefined,
     n: n !== 2 ? n : undefined,
@@ -65,11 +69,13 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           Les loisirs {city ? `de ${place}` : place},
           <br />à prix creux.
         </h1>
-        <form className="search" role="search" action="/">
-          <IconSearch size={18} />
-          <input className="input" type="search" name="q" defaultValue={q} placeholder="Karting, escape game, bowling…" aria-label="Rechercher une activité" />
-          {Object.entries(base).map(([k, v]) => (k !== 'q' && v !== undefined ? <input key={k} type="hidden" name={k} value={String(v)} /> : null))}
-        </form>
+        <SearchBox
+          key={q ?? ''}
+          defaultValue={q}
+          city={city}
+          searchHref={withParams('/', base, { q: '__Q__' })}
+          categoryHref={withParams('/', { ...base, q: undefined }, { cat: '__CAT__' })}
+        />
       </header>
 
       <section className="filters" aria-label="Filtres">
@@ -143,6 +149,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                 <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, date: d === today ? undefined : d, slot: slot.id })}>
                   <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
                     <Deal pct={slot.discountPct} />
+                    <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
                   </VenueArt>
                   <span className="deal-body">
                     <b className="deal-name">{venue.name}</b>
@@ -203,7 +210,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
         </div>
         {rolled && <p className="notice notice-primary small">Plus de créneau creux aujourd’hui : voici ceux de demain.</p>}
 
-        {items.length === 0 ? (
+        {items.length === 0 && others.length > 0 ? null : items.length === 0 ? (
           <div className="empty card">
             <b>Rien de disponible pour ce choix</b>
             <p className="small">Essaie un autre jour, un autre moment, une autre ville ou un autre nombre de personnes.</p>
@@ -221,13 +228,14 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                   <Link className="venue-link" href={link}>
                     <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
                       <Deal pct={best} />
+                      <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
                     </VenueArt>
                     <div className="body">
                       <div className="row" style={{ alignItems: 'flex-start' }}>
                         <div className="grow stack" style={{ ['--gap' as string]: '2px' }}>
                           <h3 style={{ fontSize: 17, fontWeight: 800 }}>{venue.name}</h3>
                           <span className="small muted">
-                            {CATEGORIES[venue.category].label} · {venue.area ? `${venue.area}, ` : ''}
+                            {venue.area ? `${venue.area}, ` : ''}
                             {venue.city}
                           </span>
                         </div>
@@ -256,6 +264,33 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           </div>
         )}
       </section>
+
+      {others.length > 0 && (
+        <section className="section" aria-labelledby="others-title">
+          <div className="section-title">
+            <h2 id="others-title">{items.length ? 'Aussi d’autres jours' : `« ${q} » : pas de créneau ce jour-là`}</h2>
+            <span className="small muted">prochain créneau disponible</span>
+          </div>
+          <div className="venue-grid">
+            {others.map(({ venue, photoId, next, best }) => (
+              <Link key={venue.id} className="venue-card row" href={withParams(`/lieu/${venue.slug}`, { n: base.n })} style={{ padding: 10, textDecoration: 'none', color: 'var(--ink)', ['--gap' as string]: '12px' }}>
+                <VenueArt className="swatch" color={venue.color} photoId={photoId} style={{ width: 64, height: 64, borderRadius: 14 }} />
+                <span className="grow stack" style={{ ['--gap' as string]: '3px' }}>
+                  <span className="row" style={{ ['--gap' as string]: '6px' }}>
+                    <b>{venue.name}</b>
+                    <span className="cat-tag soft">{CATEGORIES[venue.category].short}</span>
+                  </span>
+                  <span className="small muted">
+                    {venue.city}
+                    {next ? ` · prochain créneau ${relativeDay(brusselsDate(next), today).toLowerCase()} à ${timeLabel(next)}` : ' · pas de créneau pour l’instant'}
+                  </span>
+                </span>
+                {best ? <Deal pct={best} small /> : null}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

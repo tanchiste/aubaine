@@ -69,6 +69,16 @@ try {
   await client.click('.fix:has-text("dans toutes les activités")');
   await client.waitForURL((u) => !u.searchParams.get('cat'));
   ok((await client.locator('text=Kart\'Ohm').count()) > 0, 'Page vide : une alternative en un clic retrouve Kart’Ohm');
+  // Le moment de la journée s'applique aussi aux meilleurs deals et aux horaires de la liste
+  for (const [m, from, to] of [['matin', 0, 12], ['aprem', 12, 18], ['soir', 18, 24]]) {
+    await client.goto(`${BASE}/?ville=tout&moment=${m}`);
+    const texts = [...(await client.locator('.deal-card .deal-body .small').allTextContents()), ...(await client.locator('.venue-card .mini-slot').allTextContents())];
+    const hours = texts.map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
+    ok(hours.length > 0 && hours.every((h) => h >= from && h < to), `Filtre « ${m} » : uniquement des horaires entre ${from} h et ${to} h (${hours.length} vus)`);
+  }
+  await client.goto(`${BASE}/lieu/bulle-d-o?moment=matin`);
+  const ficheHours = (await client.locator('.slot b').allTextContents()).map((t) => Number(t.slice(0, 2)));
+  ok(ficheHours.length > 0 && ficheHours.every((h) => h < 12), 'La fiche garde le filtre « matin » (et propose toute la journée)');
   await client.goto(BASE + '/?q=' + encodeURIComponent('spa'));
   ok((await client.locator('text=Bulle d\'O').count()) > 0, 'Rechercher « spa » trouve le bien-être (sans accent ni mot exact)');
   await client.goto(BASE + '/');

@@ -2,11 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Deal, VenueArt } from '@/components/ui';
-import { IconBack, IconClock, IconMinus, IconPin, IconPlus, IconUsers } from '@/components/icons';
+import { IconBack, IconClock, IconMinus, IconPin, IconPlus, IconUsers, IconX } from '@/components/icons';
 import { getCurrentUser, getMyVenues } from '@/lib/auth';
 import { CATEGORIES } from '@/lib/categories';
-import { addDays, dayChip, euros, longDate, timeLabel } from '@/lib/format';
-import { DAYS_AHEAD, MAX_DAYS, clientParams, withParams } from '@/lib/params';
+import { addDays, brusselsHour, dayChip, euros, longDate, timeLabel } from '@/lib/format';
+import { DAYS_AHEAD, MAX_DAYS, MOMENTS, clientParams, withParams } from '@/lib/params';
 import { DatePicker } from '@/components/DatePicker';
 import { quote } from '@/lib/pricing';
 import { photoList, unitsFor, venueBySlug, venueSlotsForDay } from '@/lib/venues';
@@ -48,7 +48,10 @@ export default async function VenuePage({ params, searchParams }: Props) {
   }
   const need = unitsFor(venue, n);
   const selected = slots.find((s) => s.id === p.slot && s.remaining >= need) ?? null;
-  const base = { date: p.date !== p.today ? p.date : undefined, n: n !== 2 ? n : undefined };
+  const base = { date: p.date !== p.today ? p.date : undefined, n: n !== 2 ? n : undefined, moment: p.moment };
+  // Venu d'Explorer avec « Matin », « Après-midi » ou « Soir » : on garde le même moment ici.
+  const range = p.moment ? MOMENTS[p.moment] : null;
+  const shown = range ? slots.filter((s) => brusselsHour(s.startsAt) >= range.from && brusselsHour(s.startsAt) < range.to) : slots;
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(p.today, i));
   const price = selected ? quote(venue, n, selected.discountPct) : null;
   const cat = CATEGORIES[venue.category];
@@ -132,14 +135,26 @@ export default async function VenuePage({ params, searchParams }: Props) {
           </div>
         </div>
 
-        {slots.length === 0 ? (
+        {range && (
+          <div className="active-filters">
+            <Link className="filter-pill" href={withParams(`/lieu/${slug}`, base, { moment: undefined, slot: selected?.id })} aria-label={`Retirer le filtre ${range.label}`}>
+              {range.label} <IconX size={12} />
+            </Link>
+            {shown.length < slots.length && <span className="small muted">{slots.length - shown.length} autre{slots.length - shown.length > 1 ? 's' : ''} créneau{slots.length - shown.length > 1 ? 'x' : ''} dans la journée</span>}
+          </div>
+        )}
+        {shown.length === 0 ? (
           <div className="empty card">
-            <b>Pas de créneau creux ce jour-là</b>
-            <p className="small">Regarde les jours suivants.</p>
+            <b>{slots.length > 0 && range ? `Pas de créneau creux le ${range.label.toLowerCase()} ce jour-là` : 'Pas de créneau creux ce jour-là'}</b>
+            {slots.length > 0 && range ? (
+              <Link className="btn btn-sm" href={withParams(`/lieu/${slug}`, base, { moment: undefined })}>Voir toute la journée</Link>
+            ) : (
+              <p className="small">Regarde les jours suivants.</p>
+            )}
           </div>
         ) : (
           <div className="slots" role="list">
-            {slots.map((s) => {
+            {shown.map((s) => {
               const full = s.remaining < need;
               const boost = s.discountPct > venue.baseDiscountPct;
               const few = !full && venue.capacityUnit === 'places' && s.remaining <= 3;

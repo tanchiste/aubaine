@@ -154,7 +154,7 @@ export async function explorer(opts: Filters & { date: string; moment?: Moment; 
 export type Deal = { venue: Venue; photoId: string | null; slot: SlotView };
 
 /** Les plus grosses remises des 7 prochains jours : un créneau par lieu, le meilleur */
-export async function bestDeals(f: Filters & { today: string; limit?: number }): Promise<Deal[]> {
+export async function bestDeals(f: Filters & { today: string; moment?: Moment; limit?: number }): Promise<Deal[]> {
   const fit = await publishedVenues(f);
   if (fit.length === 0) return [];
   const rows = await db.execute<SlotRow>(sql`
@@ -163,6 +163,8 @@ export async function bestDeals(f: Filters & { today: string; limit?: number }):
     join venues v on v.id = s.venue_id
     where s.is_open and s.starts_at > now() + interval '30 minutes'
       and s.starts_at < ${dayEnd(addDays(f.today, 6))}
+      ${f.moment ? sql`and extract(hour from s.starts_at at time zone 'Europe/Brussels') >= ${MOMENTS[f.moment].from}
+        and extract(hour from s.starts_at at time zone 'Europe/Brussels') < ${MOMENTS[f.moment].to}` : sql``}
       and s.venue_id in (${sql.join(
         fit.map((v) => sql`${v.id}::uuid`),
         sql`, `,

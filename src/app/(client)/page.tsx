@@ -24,7 +24,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
   const [first, lm, deals, cityList] = await Promise.all([
     explorer({ ...filters, date, moment, sort }),
     date === today && !category && !q && !moment ? lastMinute(today, n, city) : Promise.resolve([]),
-    q ? Promise.resolve([]) : bestDeals({ ...filters, today }),
+    q ? Promise.resolve([]) : bestDeals({ ...filters, today, moment }),
     cities(),
   ]);
 
@@ -195,14 +195,14 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
             <h2 id="deals-title" className="row" style={{ ['--gap' as string]: '6px' }}>
               <IconBolt size={18} /> Meilleurs deals
             </h2>
-            <span className="small muted">7 prochains jours{city ? `, ${city}` : ''}</span>
+            <span className="small muted">7 prochains jours{moment ? `, ${MOMENTS[moment].label.toLowerCase()}` : ''}{city ? `, ${city}` : ''}</span>
           </div>
           <div className="deals">
             {deals.map(({ venue, photoId, slot }) => {
               const d = brusselsDate(slot.startsAt);
               const unit = discounted(venue.priceCents, slot.discountPct);
               return (
-                <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, date: d === today ? undefined : d, slot: slot.id })}>
+                <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, date: d === today ? undefined : d, slot: slot.id })}>
                   <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
                     <Deal pct={slot.discountPct} />
                     <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
@@ -292,7 +292,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               const best = Math.max(...slots.map((s) => s.discountPct));
               const from = Math.min(...slots.map((s) => discounted(venue.priceCents, s.discountPct)));
               const shown = slots.slice(0, 3);
-              const link = withParams(`/lieu/${venue.slug}`, { n: base.n, date: base.date ?? (rolled ? date : undefined) });
+              const link = withParams(`/lieu/${venue.slug}`, { n: base.n, moment, date: base.date ?? (rolled ? date : undefined) });
               return (
                 <article key={venue.id} className="venue-card">
                   <Link className="venue-link" href={link}>
@@ -318,7 +318,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                   </Link>
                   <div className="mini-slots" style={{ padding: '0 14px 14px' }}>
                     {shown.map((s) => (
-                      <Link key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
+                      <Link key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
                         {timeLabel(s.startsAt)} <em>−{s.discountPct} %</em>
                       </Link>
                     ))}

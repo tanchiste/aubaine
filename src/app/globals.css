@@ -167,7 +167,7 @@ p { margin: 0; }
 .mini-slot em { font-style: normal; font-family: var(--display); font-size: 11px; color: var(--deal); }
 
 /* ---------- Illustration (sans photo) ---------- */
-.art { position: relative; background-color: var(--c, var(--primary)); background-image: radial-gradient(rgba(255,255,255,0.18) 1.2px, transparent 1.6px); background-size: 13px 13px; }
+.art { position: relative; overflow: hidden; background-color: var(--c, var(--primary)); }
 .art > img { width: 100%; height: 100%; object-fit: cover; }
 
 /* ---------- App client ---------- */
@@ -481,4 +481,64 @@ p { margin: 0; }
 }
 @media (min-width: 700px) {
   .filter-btn { display: none; }
+}
+
+
+/* =========================================================
+   Direction artistique : « la part d'horloge »
+   Le logo est une horloge dont la part rouge est un moment à prix réduit.
+   Cette part revient partout où il est question de remise.
+   ========================================================= */
+
+/* Remise : petite part blanche proportionnelle au pourcentage */
+.deal { display: inline-flex; align-items: center; gap: 5px; }
+.deal::before {
+  content: ''; flex: none; width: 0.9em; height: 0.9em; border-radius: 50%;
+  background: conic-gradient(#fff calc(var(--p, 0) * 1%), rgba(255, 255, 255, 0.3) 0);
+}
+
+/* Chiffres (prix, heures) dans la typo du logo */
+.num, .slot b, .mini-slot { font-family: var(--display); font-weight: 600; letter-spacing: -0.01em; }
+.mini-slot { font-size: 12px; }
+.slot b { font-size: 15px; }
+.section-title h2 { font-family: var(--display); font-weight: 600; font-size: 17px; letter-spacing: -0.01em; }
+
+/* Fiches sans photo : pictogramme de l'activité et cercle du cadran */
+.art .pictogram { position: absolute; right: 6%; bottom: -12%; width: 44%; max-width: 150px; height: auto; color: rgba(255, 255, 255, 0.36); transform: rotate(-8deg); pointer-events: none; }
+.art:not(:has(img))::after {
+  content: ''; position: absolute; right: -14%; top: -38%; width: 62%; aspect-ratio: 1; border-radius: 50%;
+  border: 10px solid rgba(255, 255, 255, 0.12); pointer-events: none;
+}
+.hero .art .pictogram { width: 38%; max-width: 260px; bottom: -8%; }
+.deal-card .art .pictogram { width: 40%; bottom: -18%; }
+.art > .deal, .art > .cat-tag { z-index: 1; }
+
+/* En-tête d'Explorer : bandeau nuit, grande horloge à droite */
+.hero-band {
+  --dial-ring: #3A28D4; --dial-tick: rgba(255, 255, 255, 0.32); --dial-wedge: #FF6A4D; --dial-hub: #FFFFFF;
+  position: relative; overflow: hidden; background: var(--night); color: #fff;
+  padding: 14px 16px 18px; border-radius: 0 0 26px 26px; display: flex; flex-direction: column; gap: 14px;
+}
+.hero-top { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+.hero-copy { position: relative; z-index: 1; max-width: 66%; display: flex; flex-direction: column; gap: 8px; }
+.hero-band .explore-title { color: #fff; }
+.hero-live { font-size: 14px; font-weight: 600; color: #D6D2F2; }
+.hero-dial { position: absolute; z-index: 0; right: -42px; top: 66px; width: 128px; height: 128px; }
+.hero-band .search { position: relative; z-index: 3; }
+.hero-band .search .input { background: #fff; border-color: #fff; }
+.hero-band .picker-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.22); color: #fff; }
+.hero-band .picker-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.hero-band .logo span { color: #fff; }
+.hero-dial-wedge { animation: dial-sweep 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both; }
+@keyframes dial-sweep { from { stroke-dasharray: 0 999; } }
+@media (prefers-reduced-motion: reduce) { .hero-dial-wedge { animation: none; } }
+
+@media (min-width: 900px) {
+  .hero-band { margin-top: 20px; border-radius: 28px; padding: 30px 36px 32px; gap: 18px; }
+  .hero-top { justify-content: flex-start; }
+  .hero-copy { max-width: 640px; }
+  .hero-band .explore-title { font-size: 44px; }
+  .hero-live { font-size: 15px; }
+  .hero-dial { right: 48px; top: 50%; width: 220px; height: 220px; transform: translateY(-50%); }
+  .hero-band .search { max-width: 640px; }
 }

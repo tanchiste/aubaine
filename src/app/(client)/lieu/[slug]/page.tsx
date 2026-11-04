@@ -60,7 +60,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
     <article className={`fiche${selected ? ' has-cta' : ''}`}>
       <div className="fiche-main">
       <div className="hero">
-        <VenueArt color={venue.color} style={{ height: '100%' }}>
+        <VenueArt color={venue.color} style={{ height: '100%' }} category={photos.length ? undefined : venue.category}>
           {photos.length > 0 && (
             <div className="gallery" style={{ position: 'absolute', inset: 0 }}>
               {photos.map((ph, i) => (
@@ -183,7 +183,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
         <div className="sticky-cta">
           <div className="grow">
             <div className="row" style={{ ['--gap' as string]: '8px' }}>
-              <b style={{ fontSize: 20 }}>{euros(price.total)}</b>
+              <b className="num" style={{ fontSize: 20 }}>{euros(price.total)}</b>
               <s className="muted small">{euros(price.full)}</s>
               <Deal pct={selected.discountPct} small />
             </div>

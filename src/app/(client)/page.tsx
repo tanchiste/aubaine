@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { CityPicker } from '@/components/CityPicker';
 import { DatePicker } from '@/components/DatePicker';
 import { Deal, Logo, VenueArt } from '@/components/ui';
+import { HeroDial } from '@/components/brand';
 import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
 import { HourPicker } from '@/components/HourPicker';
@@ -98,6 +99,14 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
   const what = [q ? `« ${q} »` : 'ce choix', category ? `en ${CATEGORIES[category].short}` : null, hours ? (moment ? `le ${hours.label.toLowerCase()}` : `entre ${hours.from} h et ${hours.to} h`) : null, city ? `à ${city}` : null].filter(Boolean).join(' ');
   const when = date === today ? 'aujourd’hui' : relativeDay(date, today) === 'Demain' ? 'demain' : longDate(date);
 
+  // En-tête vivant : combien de créneaux creux pour le jour affiché, et la meilleure remise (= la part rouge de l'horloge).
+  const liveCount = items.reduce((t, i) => t + i.slots.length, 0);
+  const liveBest = items.length ? Math.max(...items.flatMap((i) => i.slots.map((x) => x.discountPct))) : 0;
+  const liveDay = rolled ? 'Demain' : date === today ? 'Aujourd’hui' : relativeDay(date, today);
+  const live = liveCount
+    ? `${liveDay} : ${liveCount} créneau${liveCount > 1 ? 'x' : ''} creux, jusqu’à −${liveBest} %`
+    : `${liveDay} : pas de créneau creux pour ce choix`;
+
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(today, i));
   const extraDay = !days.includes(date) ? date : null;
   const hrefFor: Record<string, string> = { tout: withParams('/', base, { ville: 'tout' }) };
@@ -106,15 +115,19 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="explore">
-      <header className="client-head explore-head">
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <span className="only-mobile"><Logo /></span>
+      <header className="hero-band">
+        <div className="hero-top">
+          <span className="only-mobile"><Logo dark /></span>
           <CityPicker cities={cityList} current={city} hrefFor={hrefFor} />
         </div>
-        <h1 className="display explore-title">
-          Les loisirs {city ? `de ${place}` : place},
-          <br />à prix creux.
-        </h1>
+        <div className="hero-copy">
+          <h1 className="display explore-title">
+            Les loisirs {city ? `de ${place}` : place},
+            <br />à prix creux.
+          </h1>
+          <p className="hero-live">{live}</p>
+        </div>
+        <HeroDial pct={liveBest} />
         <SearchBox
           key={q ?? ''}
           defaultValue={q}
@@ -215,7 +228,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               const unit = discounted(venue.priceCents, slot.discountPct);
               return (
                 <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: d === today ? undefined : d, slot: slot.id })}>
-                  <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
+                  <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category}>
                     <Deal pct={slot.discountPct} />
                     <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
                   </VenueArt>
@@ -225,7 +238,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                       {relativeDay(d, today)} · {timeLabel(slot.startsAt)} · {venue.city}
                     </span>
                     <span className="row" style={{ ['--gap' as string]: '6px', marginTop: 2 }}>
-                      <b style={{ fontSize: 16 }}>{euros(unit)}</b>
+                      <b className="num" style={{ fontSize: 16 }}>{euros(unit)}</b>
                       <s className="small muted">{euros(venue.priceCents)}</s>
                       <span className="small muted">{venue.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
                     </span>
@@ -308,7 +321,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               return (
                 <article key={venue.id} className="venue-card">
                   <Link className="venue-link" href={link}>
-                    <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
+                    <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category}>
                       <Deal pct={best} />
                       <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
                     </VenueArt>
@@ -322,7 +335,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                           </span>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <span className="small muted">dès</span> <b style={{ fontSize: 17 }}>{euros(from)}</b>
+                          <span className="small muted">dès</span> <b className="num" style={{ fontSize: 17 }}>{euros(from)}</b>
                           <div className="small muted">{venue.priceUnit === 'session' ? 'la séance' : 'par pers.'}</div>
                         </div>
                       </div>

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
-import type { VenueStatus } from '@/db/schema';
+import type { VenueCategory, VenueStatus } from '@/db/schema';
+import { Pictogram } from './brand';
 import { LogoMark, LogoMarkLight } from './icons';
 
 export function Logo({ dark = false, href = '/', suffix }: { dark?: boolean; href?: string; suffix?: ReactNode }) {
@@ -21,9 +22,12 @@ export function VenueArt({
   style,
   children,
   alt = '',
+  category,
 }: {
   color: string;
   photoId?: string | null;
+  /** sans photo, le pictogramme de l'activité illustre la fiche */
+  category?: VenueCategory;
   className?: string;
   style?: CSSProperties;
   children?: ReactNode;
@@ -31,7 +35,7 @@ export function VenueArt({
 }) {
   return (
     <div className={`art ${className}`} style={{ ['--c' as string]: color, ...style }}>
-      {photoId ? <img src={`/api/photos/${photoId}`} alt={alt} loading="lazy" /> : null}
+      {photoId ? <img src={`/api/photos/${photoId}`} alt={alt} loading="lazy" /> : category ? <Pictogram category={category} size={128} /> : null}
       {children}
     </div>
   );
@@ -59,6 +63,11 @@ export function StatusPill({ status }: { status: VenueStatus }) {
   return <span className={`pill ${STATUS_CLASS[status]}`}>{STATUS_LABEL[status]}</span>;
 }
 
+/** Remise : la petite part blanche, comme dans le logo, mesure le pourcentage */
 export function Deal({ pct, small = false }: { pct: number; small?: boolean }) {
-  return <span className={`deal${small ? ' sm' : ''}`}>−{pct} %</span>;
+  return (
+    <span className={`deal${small ? ' sm' : ''}`} style={{ ['--p' as string]: pct }}>
+      −{pct} %
+    </span>
+  );
 }

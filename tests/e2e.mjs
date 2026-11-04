@@ -74,7 +74,7 @@ try {
   await client.waitForURL((u) => u.searchParams.get('cat') === 'escape');
   ok(!new URL(client.url()).searchParams.get('q'), 'Choisir une catégorie remplace la recherche');
   await client.goto(BASE + '/?q=kart&cat=escape');
-  ok(await client.locator('.filter-pill:has-text("Escape")').isVisible(), 'Les filtres actifs sont affichés');
+  ok(await client.locator('.chips a[aria-current="true"]:has-text("Escape")').isVisible() && await client.locator('.reset-link').isVisible(), 'La catégorie active est visible, avec « Réinitialiser »');
   await client.click('.fix:has-text("dans toutes les activités")');
   await client.waitForURL((u) => !u.searchParams.get('cat'));
   ok((await client.locator('text=Kart\'Ohm').count()) > 0, 'Page vide : une alternative en un clic retrouve Kart’Ohm');
@@ -88,17 +88,17 @@ try {
   // Heure précise (ordinateur) : « Vers 16 h » puis une plage 14 h – 16 h
   const dk = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await dk.goto(`${BASE}/?ville=tout`);
-  await dk.click('.hour-btn');
-  await dk.click('.hour-quick button:has-text("Vers 16 h")');
+  await dk.click('.tool-btn');
+  await dk.click('.menu-time .hour-quick button:has-text("Vers 16 h")');
   await dk.waitForURL((u) => u.searchParams.get('de') === '16' && u.searchParams.get('a') === '17');
   let hrs = [...(await dk.locator('.deal-card .deal-body .small').allTextContents()), ...(await dk.locator('.venue-card .mini-slot').allTextContents())]
     .map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
   ok(hrs.length > 0 && hrs.every((h) => h === 16), `« Vers 16 h » : uniquement des créneaux de 16 h (${hrs.length} vus)`);
-  ok(await dk.locator('.filter-pill:has-text("16 h à 17 h")').isVisible(), 'La plage horaire apparaît dans les filtres actifs');
-  await dk.click('.hour-btn');
-  await dk.selectOption('.hour-menu select >> nth=0', '14');
-  await dk.selectOption('.hour-menu select >> nth=1', '16');
-  await dk.click('.hour-menu .btn-primary');
+  ok(await dk.locator('.tool-btn:has-text("16 h à 17 h")').isVisible(), 'La plage horaire s’affiche dans le bouton Horaire');
+  await dk.click('.tool-btn');
+  await dk.selectOption('.menu-precise select >> nth=0', '14');
+  await dk.selectOption('.menu-precise select >> nth=1', '16');
+  await dk.click('.menu-precise .btn-primary');
   await dk.waitForURL((u) => u.searchParams.get('de') === '14' && u.searchParams.get('a') === '16');
   hrs = (await dk.locator('.venue-card .mini-slot').allTextContents()).map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
   ok(hrs.length > 0 && hrs.every((h) => h >= 14 && h < 16), `Plage 14 h – 16 h respectée (${hrs.length} créneaux)`);
@@ -106,7 +106,7 @@ try {
 
   // Téléphone : nombre de personnes, heure et tri sont dans le panneau « Filtres »
   await client.goto(`${BASE}/?ville=tout`);
-  ok(!(await client.locator('.hour-btn').isVisible()), 'Sur téléphone, l’écran d’accueil est allégé (heure et personnes dans « Filtres »)');
+  ok(!(await client.locator('.tool-btn').isVisible()), 'Sur téléphone, l’écran d’accueil est allégé (heure et personnes dans « Filtres »)');
   await client.click('.filter-btn');
   await client.click('.sheet-options button:has-text("Soir")');
   await client.click('.sheet .stepper button[aria-label="Une personne de plus"]');

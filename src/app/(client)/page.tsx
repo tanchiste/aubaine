@@ -6,7 +6,7 @@ import { Deal, Logo, VenueArt } from '@/components/ui';
 import { HeroDial } from '@/components/brand';
 import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
-import { HourPicker } from '@/components/HourPicker';
+import { SortMenu, TimeMenu } from '@/components/Menus';
 import { FilterSheet } from '@/components/FilterSheet';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
@@ -57,12 +57,13 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     tri: sort !== 'remise' ? sort : undefined,
     ville: city ?? (raw.ville === 'tout' ? 'tout' : undefined),
   };
-  // Filtres actifs, affichés avec une croix pour les retirer un par un.
-  const active = [
-    q ? { key: 'q', label: `« ${q} »`, remove: withParams('/', base, { q: undefined }) } : null,
-    category ? { key: 'cat', label: CATEGORIES[category].short, remove: withParams('/', base, { cat: undefined }) } : null,
+  // Sur téléphone, personnes, horaire et tri sont dans « Filtres » : on les rappelle en pastilles.
+  const hidden = [
     hours ? { key: 'hours', label: hours.label, remove: withParams('/', base, { moment: undefined, de: undefined, a: undefined }) } : null,
+    n !== 2 ? { key: 'n', label: `${n} pers.`, remove: withParams('/', base, { n: undefined }) } : null,
+    sort !== 'remise' ? { key: 'sort', label: SORTS[sort], remove: withParams('/', base, { tri: undefined }) } : null,
   ].filter((f): f is { key: string; label: string; remove: string } => f !== null);
+  const anyFilter = !!(category || q || hours || n !== 2 || sort !== 'remise');
 
   // Rien trouvé : on teste ce qui donnerait des résultats en relâchant un filtre à la fois.
   const fixes: { key: string; label: string; href: string; n: number }[] = [];
@@ -140,28 +141,30 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
       </header>
 
       <section className="filters" aria-label="Filtres">
-        <nav className="days" aria-label="Choisir le jour">
-          {days.map((d) => {
-            const c = dayChip(d, today);
-            return (
-              <Link key={d} className="day" href={withParams('/', base, { date: d === today ? undefined : d })} aria-current={d === date ? 'true' : undefined}>
-                <span>{c.top}</span>
-                <b>{c.num}</b>
-              </Link>
-            );
-          })}
-          {extraDay && (
-            <Link className="day" href={withParams('/', base)} aria-current="true">
-              <span>{dayChip(extraDay, today).top}</span>
-              <b>{dayChip(extraDay, today).num}</b>
-            </Link>
-          )}
-          <DatePicker value={date} min={today} max={addDays(today, MAX_DAYS - 1)} hrefBase={withParams('/', base, { date: '__DATE__' })} label="Plus tard" />
-        </nav>
-
-        <div className="filters-row">
-          <div className="row" style={{ ['--gap' as string]: '12px' }}>
-            <span className="label">Combien ?</span>
+        <div className="toolbar">
+          <div className="tool tool-days">
+            <span className="tool-label">Jour</span>
+            <nav className="days" aria-label="Choisir le jour">
+              {days.map((d) => {
+                const c = dayChip(d, today);
+                return (
+                  <Link key={d} className="day" href={withParams('/', base, { date: d === today ? undefined : d })} aria-current={d === date ? 'true' : undefined}>
+                    <span>{c.top}</span>
+                    <b>{c.num}</b>
+                  </Link>
+                );
+              })}
+              {extraDay && (
+                <Link className="day" href={withParams('/', base)} aria-current="true">
+                  <span>{dayChip(extraDay, today).top}</span>
+                  <b>{dayChip(extraDay, today).num}</b>
+                </Link>
+              )}
+              <DatePicker value={date} min={today} max={addDays(today, MAX_DAYS - 1)} hrefBase={withParams('/', base, { date: '__DATE__' })} label="Plus tard" />
+            </nav>
+          </div>
+          <div className="tool tool-desktop">
+            <span className="tool-label">Personnes</span>
             <div className="stepper">
               <Link href={withParams('/', base, { n: n - 1 === 2 ? undefined : n - 1 })} aria-label="Une personne de moins" aria-disabled={n <= 1 ? 'true' : undefined}>
                 <IconMinus size={16} strokeWidth={2} />
@@ -172,46 +175,57 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               </Link>
             </div>
           </div>
-          <div className="row time-filters" style={{ ['--gap' as string]: '8px', flexWrap: 'wrap' }}>
-          <nav className="seg" aria-label="Moment de la journée">
-            <Link href={withParams('/', base, { moment: undefined, de: undefined, a: undefined })} aria-current={!hours ? 'true' : undefined}>Toute la journée</Link>
-            {(Object.keys(MOMENTS) as Moment[]).map((m) => (
-              <Link key={m} href={withParams('/', base, { moment: m, de: undefined, a: undefined })} aria-current={moment === m ? 'true' : undefined}>
-                {MOMENTS[m].label}
-              </Link>
-            ))}
-          </nav>
-            <HourPicker from={p.de} to={p.a} hrefBase={withParams('/', { ...base, moment: undefined }, { de: '__DE__', a: '__A__' })} />
+          <div className="tool tool-desktop">
+            <span className="tool-label">Horaire</span>
+            <TimeMenu
+              label={hours ? hours.label : 'Toute la journée'}
+              de={p.de}
+              a={p.a}
+              preciseHref={withParams('/', { ...base, moment: undefined }, { de: '__DE__', a: '__A__' })}
+              presets={[
+                { key: 'all', label: 'Toute la journée', hint: '', href: withParams('/', base, { moment: undefined, de: undefined, a: undefined }), active: !hours },
+                ...(Object.keys(MOMENTS) as Moment[]).map((m) => ({
+                  key: m,
+                  label: MOMENTS[m].label,
+                  hint: `${MOMENTS[m].from} h – ${MOMENTS[m].to === 24 ? 'minuit' : `${MOMENTS[m].to} h`}`,
+                  href: withParams('/', base, { moment: m, de: undefined, a: undefined }),
+                  active: moment === m,
+                })),
+              ]}
+            />
           </div>
         </div>
 
-        <nav className="chips" aria-label="Catégories">
-          <FilterSheet
-            base={{ date: base.date, cat: base.cat, q: base.q, ville: base.ville }}
-            current={{ n, moment, de: p.de, a: p.a, sort }}
-            maxPeople={MAX_PEOPLE}
-          />
-          <Link className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
-            Tout
-          </Link>
-          {CATEGORY_KEYS.filter((k) => k !== 'autre').map((k) => (
-            <Link key={k} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
-              {CATEGORIES[k].short}
+        <div className="cats-row">
+          <nav className="chips" aria-label="Catégories">
+            <FilterSheet
+              base={{ date: base.date, cat: base.cat, q: base.q, ville: base.ville }}
+              current={{ n, moment, de: p.de, a: p.a, sort }}
+              maxPeople={MAX_PEOPLE}
+            />
+            <Link className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
+              Tout
             </Link>
-          ))}
-        </nav>
-        {active.length > 0 && (
-          <div className="active-filters" aria-label="Filtres actifs">
-            {active.map((f) => (
+            {CATEGORY_KEYS.filter((k) => k !== 'autre').map((k) => (
+              <Link key={k} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
+                {CATEGORIES[k].short}
+              </Link>
+            ))}
+          </nav>
+          {anyFilter && (
+            <Link className="reset-link" href={withParams('/', { ville: base.ville, date: base.date })}>
+              Réinitialiser
+            </Link>
+          )}
+        </div>
+
+        {hidden.length > 0 && (
+          <div className="active-filters only-phone" aria-label="Filtres actifs">
+            {hidden.map((f) => (
               <Link key={f.key} className="filter-pill" href={f.remove} aria-label={`Retirer le filtre ${f.label}`}>
                 {f.label} <IconX size={12} />
               </Link>
             ))}
-            {active.length > 1 && (
-              <Link className="small" style={{ fontWeight: 700 }} href={withParams('/', { ...base, q: undefined, cat: undefined, moment: undefined, de: undefined, a: undefined })}>
-                Tout effacer
-              </Link>
-            )}
           </div>
         )}
       </section>
@@ -283,13 +297,9 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               {items.length} lieu{items.length > 1 ? 'x' : ''}
             </span>
           </h2>
-          <nav className="sort" aria-label="Trier">
-            {(Object.keys(SORTS) as Sort[]).map((s) => (
-              <Link key={s} href={withParams('/', base, { tri: s === 'remise' ? undefined : s })} aria-current={sort === s ? 'true' : undefined}>
-                {SORTS[s]}
-              </Link>
-            ))}
-          </nav>
+          <SortMenu
+            options={(Object.keys(SORTS) as Sort[]).map((k) => ({ key: k, label: SORTS[k], href: withParams('/', base, { tri: k === 'remise' ? undefined : k }), active: sort === k }))}
+          />
         </div>
         {rolled && <p className="notice notice-primary small">Plus de créneau creux aujourd’hui : voici ceux de demain.</p>}
 

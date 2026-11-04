@@ -89,19 +89,13 @@ try {
   const dk = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await dk.goto(`${BASE}/?ville=tout`);
   await dk.click('.tool-btn');
-  await dk.click('.menu-time .hour-quick button:has-text("Vers 16 h")');
-  await dk.waitForURL((u) => u.searchParams.get('de') === '16' && u.searchParams.get('a') === '17');
+  ok((await dk.locator('.menu-time a').count()) === 4 && (await dk.locator('.menu-time select').count()) === 1, 'Menu Horaire simple : 4 moments et un seul choix « vers une heure »');
+  await dk.selectOption('.menu-time select', '16');
+  await dk.waitForURL((u) => u.searchParams.get('de') === '16' && u.searchParams.get('a') === '18');
   let hrs = [...(await dk.locator('.deal-card .deal-body .small').allTextContents()), ...(await dk.locator('.venue-card .mini-slot').allTextContents())]
     .map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
-  ok(hrs.length > 0 && hrs.every((h) => h === 16), `« Vers 16 h » : uniquement des créneaux de 16 h (${hrs.length} vus)`);
-  ok(await dk.locator('.tool-btn:has-text("16 h à 17 h")').isVisible(), 'La plage horaire s’affiche dans le bouton Horaire');
-  await dk.click('.tool-btn');
-  await dk.selectOption('.menu-precise select >> nth=0', '14');
-  await dk.selectOption('.menu-precise select >> nth=1', '16');
-  await dk.click('.menu-precise .btn-primary');
-  await dk.waitForURL((u) => u.searchParams.get('de') === '14' && u.searchParams.get('a') === '16');
-  hrs = (await dk.locator('.venue-card .mini-slot').allTextContents()).map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
-  ok(hrs.length > 0 && hrs.every((h) => h >= 14 && h < 16), `Plage 14 h – 16 h respectée (${hrs.length} créneaux)`);
+  ok(hrs.length > 0 && hrs.every((h) => h >= 16 && h < 18), `« Vers 16 h » : créneaux entre 16 h et 18 h (${hrs.length} vus)`);
+  ok(await dk.locator('.tool-btn:has-text("16 h – 18 h")').isVisible(), 'La plage horaire s’affiche dans le bouton Horaire');
   await dk.close();
 
   // Téléphone : nombre de personnes, heure et tri sont dans le panneau « Filtres »

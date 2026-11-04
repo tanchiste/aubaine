@@ -187,7 +187,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                 ...(Object.keys(MOMENTS) as Moment[]).map((m) => ({
                   key: m,
                   label: MOMENTS[m].label,
-                  hint: `${MOMENTS[m].from} h – ${MOMENTS[m].to === 24 ? 'minuit' : `${MOMENTS[m].to} h`}`,
+                  hint: m === 'matin' ? 'avant 12 h' : m === 'soir' ? 'après 18 h' : '12 h – 18 h',
                   href: withParams('/', base, { moment: m, de: undefined, a: undefined }),
                   active: moment === m,
                 })),

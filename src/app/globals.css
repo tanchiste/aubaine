@@ -591,3 +591,8 @@ p { margin: 0; }
   .tool { justify-content: space-between; gap: 8px; }
   .toolbar .day-cal { width: auto; min-width: 74px; }
 }
+
+.menu-time { width: 300px; }
+.menu-vers { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 8px 6px 4px 12px; border-top: 1px solid var(--line-2); font-size: 14px; font-weight: 600; cursor: pointer; }
+.menu-vers .select { width: 104px; height: 38px; font-size: 14px; padding: 0 10px; }
+.menu-vers.on .select { border-color: var(--night); background: #fff; }

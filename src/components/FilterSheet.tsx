@@ -9,7 +9,7 @@ type Values = { n: number; moment?: Moment; de?: number; a?: number; sort: Sort 
 
 const MOMENTS: [Moment, string][] = [['matin', 'Matin'], ['aprem', 'Après-midi'], ['soir', 'Soir']];
 const SORTS: [Sort, string][] = [['remise', 'Meilleure remise'], ['heure', 'Plus tôt'], ['prix', 'Moins cher']];
-const HOURS = Array.from({ length: 17 }, (_, i) => i + 8);
+const VERS = Array.from({ length: 14 }, (_, i) => i + 9);
 
 /**
  * Sur téléphone : nombre de personnes, heure et tri regroupés dans un panneau,
@@ -93,23 +93,15 @@ export function FilterSheet({ base, current, maxPeople }: { base: Record<string,
                   {MOMENTS.map(([m, label]) => (
                     <button key={m} type="button" aria-pressed={!precise && v.moment === m} onClick={() => { setPrecise(false); setV({ ...v, moment: m }); }}>{label}</button>
                   ))}
-                  <button type="button" aria-pressed={precise} onClick={() => { setPrecise(true); setV({ ...v, de: v.de ?? 14, a: v.a ?? 16 }); }}>Heure précise</button>
+                  <button type="button" aria-pressed={precise} onClick={() => { setPrecise(true); setV({ ...v, de: v.de ?? 14, a: (v.de ?? 14) + 2 }); }}>Vers une heure</button>
                 </div>
                 {precise && (
-                  <div className="row" style={{ ['--gap' as string]: '8px' }}>
-                    <label className="field grow">
-                      <span>Entre</span>
-                      <select className="select" value={v.de ?? 14} onChange={(e) => { const de = Number(e.target.value); setV({ ...v, de, a: (v.a ?? 16) <= de ? de + 1 : v.a }); }}>
-                        {HOURS.filter((h) => h < 24).map((h) => <option key={h} value={h}>{h} h</option>)}
-                      </select>
-                    </label>
-                    <label className="field grow">
-                      <span>et</span>
-                      <select className="select" value={v.a ?? 16} onChange={(e) => setV({ ...v, a: Number(e.target.value) })}>
-                        {HOURS.filter((h) => h > (v.de ?? 14)).map((h) => <option key={h} value={h}>{h === 24 ? 'minuit' : `${h} h`}</option>)}
-                      </select>
-                    </label>
-                  </div>
+                  <label className="field">
+                    <span>Vers</span>
+                    <select className="select" value={v.de ?? 14} onChange={(e) => { const de = Number(e.target.value); setV({ ...v, de, a: Math.min(24, de + 2) }); }}>
+                      {VERS.map((h) => <option key={h} value={h}>{h} h</option>)}
+                    </select>
+                  </label>
                 )}
               </section>
 

@@ -23,19 +23,14 @@ function usePopover() {
   return { open, setOpen, ref };
 }
 
-const HOURS = Array.from({ length: 17 }, (_, i) => i + 8);
+/** Heures proposées pour « vers » : de 9 h à 22 h */
+const VERS = Array.from({ length: 14 }, (_, i) => i + 9);
 type Preset = { key: string; label: string; hint: string; href: string; active: boolean };
 
-/** Horaire : toute la journée, un moment, ou une plage précise, dans un seul menu */
-export function TimeMenu({ label, presets, de, a, preciseHref }: { label: string; presets: Preset[]; de?: number; a?: number; preciseHref: string }) {
+/** Horaire : toute la journée, un moment, ou « vers 14 h » (créneaux de 14 h à 16 h) */
+export function TimeMenu({ label, presets, de, preciseHref }: { label: string; presets: Preset[]; de?: number; a?: number; preciseHref: string }) {
   const { open, setOpen, ref } = usePopover();
   const router = useRouter();
-  const [from, setFrom] = useState(de ?? 14);
-  const [to, setTo] = useState(a ?? 16);
-  const go = (f: number, t: number) => {
-    setOpen(false);
-    router.push(preciseHref.replace('__DE__', String(f)).replace('__A__', String(t)));
-  };
   return (
     <div className="picker" ref={ref}>
       <button type="button" className="tool-btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -52,26 +47,24 @@ export function TimeMenu({ label, presets, de, a, preciseHref }: { label: string
               {p.active && <IconCheck size={16} />}
             </Link>
           ))}
-          <div className="menu-sep" />
-          <div className="menu-precise">
-            <span className="label">Heure précise</span>
-            <div className="hour-quick">
-              {[10, 12, 14, 16, 18, 20].map((h) => (
-                <button key={h} type="button" className="chip" onClick={() => go(h, h + 1)}>
-                  Vers {h} h
-                </button>
+          <label className={`menu-vers${de !== undefined ? ' on' : ''}`}>
+            <span className="grow">Vers une heure</span>
+            <select
+              className="select"
+              aria-label="Vers quelle heure"
+              value={de ?? ''}
+              onChange={(e) => {
+                const h = Number(e.target.value);
+                setOpen(false);
+                router.push(preciseHref.replace('__DE__', String(h)).replace('__A__', String(Math.min(24, h + 2))));
+              }}
+            >
+              <option value="" disabled>Choisir</option>
+              {VERS.map((h) => (
+                <option key={h} value={h}>{h} h</option>
               ))}
-            </div>
-            <div className="row" style={{ ['--gap' as string]: '8px' }}>
-              <select className="select" aria-label="À partir de" value={from} onChange={(e) => { const f = Number(e.target.value); setFrom(f); if (to <= f) setTo(f + 1); }}>
-                {HOURS.filter((h) => h < 24).map((h) => <option key={h} value={h}>de {h} h</option>)}
-              </select>
-              <select className="select" aria-label="Jusqu’à" value={to} onChange={(e) => setTo(Number(e.target.value))}>
-                {HOURS.filter((h) => h > from).map((h) => <option key={h} value={h}>à {h === 24 ? 'minuit' : `${h} h`}</option>)}
-              </select>
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => go(from, to)}>OK</button>
-            </div>
-          </div>
+            </select>
+          </label>
         </div>
       )}
     </div>

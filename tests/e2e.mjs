@@ -76,6 +76,22 @@ try {
     const hours = texts.map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
     ok(hours.length > 0 && hours.every((h) => h >= from && h < to), `Filtre « ${m} » : uniquement des horaires entre ${from} h et ${to} h (${hours.length} vus)`);
   }
+  // Heure précise : « Vers 16 h » puis une plage 14 h – 16 h
+  await client.goto(`${BASE}/?ville=tout`);
+  await client.click('.hour-btn');
+  await client.click('.hour-quick button:has-text("Vers 16 h")');
+  await client.waitForURL((u) => u.searchParams.get('de') === '16' && u.searchParams.get('a') === '17');
+  let hrs = [...(await client.locator('.deal-card .deal-body .small').allTextContents()), ...(await client.locator('.venue-card .mini-slot').allTextContents())]
+    .map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
+  ok(hrs.length > 0 && hrs.every((h) => h === 16), `« Vers 16 h » : uniquement des créneaux de 16 h (${hrs.length} vus)`);
+  ok(await client.locator('.filter-pill:has-text("16 h à 17 h")').isVisible(), 'La plage horaire apparaît dans les filtres actifs');
+  await client.click('.hour-btn');
+  await client.selectOption('.hour-menu select >> nth=0', '14');
+  await client.selectOption('.hour-menu select >> nth=1', '16');
+  await client.click('.hour-menu .btn-primary');
+  await client.waitForURL((u) => u.searchParams.get('de') === '14' && u.searchParams.get('a') === '16');
+  hrs = (await client.locator('.venue-card .mini-slot').allTextContents()).map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
+  ok(hrs.length > 0 && hrs.every((h) => h >= 14 && h < 16), `Plage 14 h – 16 h respectée (${hrs.length} créneaux)`);
   await client.goto(`${BASE}/lieu/bulle-d-o?moment=matin`);
   const ficheHours = (await client.locator('.slot b').allTextContents()).map((t) => Number(t.slice(0, 2)));
   ok(ficheHours.length > 0 && ficheHours.every((h) => h < 12), 'La fiche garde le filtre « matin » (et propose toute la journée)');

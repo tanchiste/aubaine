@@ -5,6 +5,7 @@ import { DatePicker } from '@/components/DatePicker';
 import { Deal, Logo, VenueArt } from '@/components/ui';
 import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
+import { HourPicker } from '@/components/HourPicker';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
@@ -17,14 +18,14 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
   const raw = await searchParams;
   const saved = (await cookies()).get(CITY_COOKIE)?.value;
   const p = clientParams(raw, saved ? decodeURIComponent(saved) : undefined);
-  const { today, n, category, q, moment, sort, city } = p;
+  const { today, n, category, q, moment, hours, sort, city } = p;
   const filters = { people: n, category, q, city };
 
   let date = p.date;
   const [first, lm, deals, cityList] = await Promise.all([
-    explorer({ ...filters, date, moment, sort }),
-    date === today && !category && !q && !moment ? lastMinute(today, n, city) : Promise.resolve([]),
-    q ? Promise.resolve([]) : bestDeals({ ...filters, today, moment }),
+    explorer({ ...filters, date, hours, sort }),
+    date === today && !category && !q && !hours ? lastMinute(today, n, city) : Promise.resolve([]),
+    q ? Promise.resolve([]) : bestDeals({ ...filters, today, hours }),
     cities(),
   ]);
 
@@ -32,7 +33,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
   let items = first;
   let rolled = false;
   if (items.length === 0 && date === today && !raw.date) {
-    const next = await explorer({ ...filters, date: addDays(today, 1), moment, sort });
+    const next = await explorer({ ...filters, date: addDays(today, 1), hours, sort });
     if (next.length > 0) {
       items = next;
       date = addDays(today, 1);
@@ -49,6 +50,8 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     cat: category,
     q,
     moment,
+    de: p.de,
+    a: p.a,
     tri: sort !== 'remise' ? sort : undefined,
     ville: city ?? (raw.ville === 'tout' ? 'tout' : undefined),
   };
@@ -56,7 +59,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
   const active = [
     q ? { key: 'q', label: `« ${q} »`, remove: withParams('/', base, { q: undefined }) } : null,
     category ? { key: 'cat', label: CATEGORIES[category].short, remove: withParams('/', base, { cat: undefined }) } : null,
-    moment ? { key: 'moment', label: MOMENTS[moment].label, remove: withParams('/', base, { moment: undefined }) } : null,
+    hours ? { key: 'hours', label: hours.label, remove: withParams('/', base, { moment: undefined, de: undefined, a: undefined }) } : null,
   ].filter((f): f is { key: string; label: string; remove: string } => f !== null);
 
   // Rien trouvé : on teste ce qui donnerait des résultats en relâchant un filtre à la fois.
@@ -75,23 +78,23 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
       return null;
     };
     const found = await Promise.all([
-      category && q ? attempt('cat', `« ${q} » dans toutes les activités`, { cat: undefined }, (d) => explorer({ ...filters, category: undefined, date: d, moment, sort })) : null,
-      q ? attempt('q', category ? `Tous les lieux ${CATEGORIES[category].short}` : 'Tous les lieux, sans la recherche', { q: undefined }, (d) => explorer({ ...filters, q: undefined, date: d, moment, sort })) : null,
-      moment ? attempt('moment', 'Toute la journée', { moment: undefined }, (d) => explorer({ ...filters, date: d, sort })) : null,
-      city ? attempt('city', 'Tout le Hainaut', { ville: 'tout' }, (d) => explorer({ ...filters, city: undefined, date: d, moment, sort })) : null,
+      category && q ? attempt('cat', `« ${q} » dans toutes les activités`, { cat: undefined }, (d) => explorer({ ...filters, category: undefined, date: d, hours, sort })) : null,
+      q ? attempt('q', category ? `Tous les lieux ${CATEGORIES[category].short}` : 'Tous les lieux, sans la recherche', { q: undefined }, (d) => explorer({ ...filters, q: undefined, date: d, hours, sort })) : null,
+      hours ? attempt('hours', 'Toute la journée', { moment: undefined, de: undefined, a: undefined }, (d) => explorer({ ...filters, date: d, sort })) : null,
+      city ? attempt('city', 'Tout le Hainaut', { ville: 'tout' }, (d) => explorer({ ...filters, city: undefined, date: d, hours, sort })) : null,
     ]);
     for (const f of found) if (f) fixes.push(f);
     for (let i = canRoll ? 2 : 1; i <= 6; i++) {
       const d = addDays(date, i);
       if (d > addDays(today, MAX_DAYS - 1)) break;
-      const r = await explorer({ ...filters, date: d, moment, sort });
+      const r = await explorer({ ...filters, date: d, hours, sort });
       if (r.length) {
         fixes.push({ key: 'day', label: `Le même choix ${relativeDay(d, today).toLowerCase()}`, href: withParams('/', base, { date: d }), n: r.length });
         break;
       }
     }
   }
-  const what = [q ? `« ${q} »` : 'ce choix', category ? `en ${CATEGORIES[category].short}` : null, moment ? `le ${MOMENTS[moment].label.toLowerCase()}` : null, city ? `à ${city}` : null].filter(Boolean).join(' ');
+  const what = [q ? `« ${q} »` : 'ce choix', category ? `en ${CATEGORIES[category].short}` : null, hours ? (moment ? `le ${hours.label.toLowerCase()}` : `entre ${hours.from} h et ${hours.to} h`) : null, city ? `à ${city}` : null].filter(Boolean).join(' ');
   const when = date === today ? 'aujourd’hui' : relativeDay(date, today) === 'Demain' ? 'demain' : longDate(date);
 
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(today, i));
@@ -153,14 +156,17 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               </Link>
             </div>
           </div>
+          <div className="row time-filters" style={{ ['--gap' as string]: '8px', flexWrap: 'wrap' }}>
           <nav className="seg" aria-label="Moment de la journée">
-            <Link href={withParams('/', base, { moment: undefined })} aria-current={!moment ? 'true' : undefined}>Toute la journée</Link>
+            <Link href={withParams('/', base, { moment: undefined, de: undefined, a: undefined })} aria-current={!hours ? 'true' : undefined}>Toute la journée</Link>
             {(Object.keys(MOMENTS) as Moment[]).map((m) => (
-              <Link key={m} href={withParams('/', base, { moment: m })} aria-current={moment === m ? 'true' : undefined}>
+              <Link key={m} href={withParams('/', base, { moment: m, de: undefined, a: undefined })} aria-current={moment === m ? 'true' : undefined}>
                 {MOMENTS[m].label}
               </Link>
             ))}
           </nav>
+            <HourPicker from={p.de} to={p.a} hrefBase={withParams('/', { ...base, moment: undefined }, { de: '__DE__', a: '__A__' })} />
+          </div>
         </div>
 
         <nav className="chips" aria-label="Catégories">
@@ -181,7 +187,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               </Link>
             ))}
             {active.length > 1 && (
-              <Link className="small" style={{ fontWeight: 700 }} href={withParams('/', { ...base, q: undefined, cat: undefined, moment: undefined })}>
+              <Link className="small" style={{ fontWeight: 700 }} href={withParams('/', { ...base, q: undefined, cat: undefined, moment: undefined, de: undefined, a: undefined })}>
                 Tout effacer
               </Link>
             )}
@@ -195,14 +201,14 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
             <h2 id="deals-title" className="row" style={{ ['--gap' as string]: '6px' }}>
               <IconBolt size={18} /> Meilleurs deals
             </h2>
-            <span className="small muted">7 prochains jours{moment ? `, ${MOMENTS[moment].label.toLowerCase()}` : ''}{city ? `, ${city}` : ''}</span>
+            <span className="small muted">7 prochains jours{hours ? `, ${moment ? hours.label.toLowerCase() : hours.label}` : ''}{city ? `, ${city}` : ''}</span>
           </div>
           <div className="deals">
             {deals.map(({ venue, photoId, slot }) => {
               const d = brusselsDate(slot.startsAt);
               const unit = discounted(venue.priceCents, slot.discountPct);
               return (
-                <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, date: d === today ? undefined : d, slot: slot.id })}>
+                <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: d === today ? undefined : d, slot: slot.id })}>
                   <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
                     <Deal pct={slot.discountPct} />
                     <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
@@ -292,7 +298,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               const best = Math.max(...slots.map((s) => s.discountPct));
               const from = Math.min(...slots.map((s) => discounted(venue.priceCents, s.discountPct)));
               const shown = slots.slice(0, 3);
-              const link = withParams(`/lieu/${venue.slug}`, { n: base.n, moment, date: base.date ?? (rolled ? date : undefined) });
+              const link = withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined) });
               return (
                 <article key={venue.id} className="venue-card">
                   <Link className="venue-link" href={link}>
@@ -318,7 +324,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                   </Link>
                   <div className="mini-slots" style={{ padding: '0 14px 14px' }}>
                     {shown.map((s) => (
-                      <Link key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
+                      <Link key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
                         {timeLabel(s.startsAt)} <em>−{s.discountPct} %</em>
                       </Link>
                     ))}

@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { venuePhotos, venues, type Venue, type VenueCategory } from '@/db/schema';
 import { MAX_DISCOUNT, MIN_DISCOUNT, discounted } from './pricing';
 import { addDays, brusselsHour } from './format';
-import { MOMENTS, type Moment, type Sort } from './params';
+import type { HourRange, Sort } from './params';
 import { matchVenue } from './search';
 
 export type SlotView = { id: string; startsAt: Date; discountPct: number; capacity: number; remaining: number };
@@ -115,7 +115,7 @@ export async function searchVenues(q: string, opts: { people?: number; city?: st
 
 const minPrice = (v: Venue, slots: SlotView[]) => Math.min(...slots.map((s) => discounted(v.priceCents, s.discountPct)));
 
-export async function explorer(opts: Filters & { date: string; moment?: Moment; sort?: Sort }) {
+export async function explorer(opts: Filters & { date: string; hours?: HourRange; sort?: Sort }) {
   const fit = await publishedVenues(opts);
   const [rows, photos] = await Promise.all([
     slotsForDay(
@@ -124,7 +124,7 @@ export async function explorer(opts: Filters & { date: string; moment?: Moment; 
     ),
     firstPhotos(fit.map((v) => v.id)),
   ]);
-  const range = opts.moment ? MOMENTS[opts.moment] : null;
+  const range = opts.hours ?? null;
 
   const byVenue = new Map<string, SlotView[]>();
   for (const r of rows) {
@@ -154,7 +154,7 @@ export async function explorer(opts: Filters & { date: string; moment?: Moment; 
 export type Deal = { venue: Venue; photoId: string | null; slot: SlotView };
 
 /** Les plus grosses remises des 7 prochains jours : un créneau par lieu, le meilleur */
-export async function bestDeals(f: Filters & { today: string; moment?: Moment; limit?: number }): Promise<Deal[]> {
+export async function bestDeals(f: Filters & { today: string; hours?: HourRange; limit?: number }): Promise<Deal[]> {
   const fit = await publishedVenues(f);
   if (fit.length === 0) return [];
   const rows = await db.execute<SlotRow>(sql`
@@ -163,8 +163,8 @@ export async function bestDeals(f: Filters & { today: string; moment?: Moment; l
     join venues v on v.id = s.venue_id
     where s.is_open and s.starts_at > now() + interval '30 minutes'
       and s.starts_at < ${dayEnd(addDays(f.today, 6))}
-      ${f.moment ? sql`and extract(hour from s.starts_at at time zone 'Europe/Brussels') >= ${MOMENTS[f.moment].from}
-        and extract(hour from s.starts_at at time zone 'Europe/Brussels') < ${MOMENTS[f.moment].to}` : sql``}
+      ${f.hours ? sql`and extract(hour from s.starts_at at time zone 'Europe/Brussels') >= ${f.hours.from}
+        and extract(hour from s.starts_at at time zone 'Europe/Brussels') < ${f.hours.to}` : sql``}
       and s.venue_id in (${sql.join(
         fit.map((v) => sql`${v.id}::uuid`),
         sql`, `,

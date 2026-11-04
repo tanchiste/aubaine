@@ -15,6 +15,13 @@
       "when": 1793737754277,
       "tag": "0001_slots_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793827876949,
+      "tag": "0002_comptes",
+      "breakpoints": true
     }
   ]
 }

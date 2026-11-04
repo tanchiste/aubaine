@@ -1,9 +1,12 @@
 'use client';
+import Link from 'next/link';
 import { useActionState } from 'react';
+import { CodeStep } from '@/components/CodeStep';
 import { loginAction, type LoginState } from './actions';
 
 export function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(loginAction, { step: 'email', next });
+  const signupHref = next.startsWith('/pro') ? '/inscription?type=exploitant' : `/inscription${next !== '/' ? `?suite=${encodeURIComponent(next)}` : ''}`;
 
   if (state.step === 'email') {
     return (
@@ -14,11 +17,18 @@ export function LoginForm({ next }: { next: string }) {
           <span>Ton adresse email</span>
           <input className="input" type="email" name="email" required autoComplete="email" inputMode="email" defaultValue={state.email} placeholder="prenom@exemple.be" autoFocus />
         </label>
-        {state.error && <p className="error" role="alert">{state.error}</p>}
+        {state.error && (
+          <p className="error" role="alert">
+            {state.error} {state.noAccount && <Link href={signupHref}>Créer un compte</Link>}
+          </p>
+        )}
         <button className="btn btn-primary btn-lg btn-block" disabled={pending}>
           {pending ? 'Envoi…' : 'Recevoir mon code'}
         </button>
-        <p className="small muted">Pas de mot de passe : on t’envoie un code à 6 chiffres. Ton compte est créé automatiquement.</p>
+        <p className="small muted">Pas de mot de passe : on t’envoie un code à 6 chiffres.</p>
+        <p className="auth-switch">
+          Pas encore de compte ? <Link href={signupHref}>Créer un compte</Link>
+        </p>
       </form>
     );
   }
@@ -26,31 +36,7 @@ export function LoginForm({ next }: { next: string }) {
   return (
     <form action={action} className="stack" style={{ ['--gap' as string]: '14px' }}>
       <input type="hidden" name="next" value={next} />
-      <input type="hidden" name="email" value={state.email} />
-      <p style={{ color: 'var(--ink-2)' }}>
-        Code envoyé à <b>{state.email}</b>. Il est valable 10 minutes.
-      </p>
-      {state.devCode && (
-        <p className="notice notice-primary small" data-testid="dev-code">
-          Mode développement : ton code est <b>{state.devCode}</b>
-        </p>
-      )}
-      <label className="field">
-        <span>Code à 6 chiffres</span>
-        <input className="input code-input" name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]{6,7}" maxLength={7} autoFocus />
-      </label>
-      {state.error && <p className="error" role="alert">{state.error}</p>}
-      <button className="btn btn-primary btn-lg btn-block" name="intent" value="verify" disabled={pending}>
-        {pending ? 'Vérification…' : 'Me connecter'}
-      </button>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <button className="btn btn-sm" name="intent" value="send" formNoValidate disabled={pending}>
-          Renvoyer un code
-        </button>
-        <button className="btn btn-sm" name="intent" value="restart" formNoValidate disabled={pending}>
-          Changer d’email
-        </button>
-      </div>
+      <CodeStep email={state.email} devCode={state.devCode} error={state.error} pending={pending} cta="Me connecter" />
     </form>
   );
 }

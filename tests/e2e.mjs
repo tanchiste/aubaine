@@ -25,6 +25,22 @@ async function login(page, email, next) {
   await page.waitForURL((u) => !u.pathname.startsWith('/connexion'));
 }
 
+/** Inscription : type de compte, prénom, email (et établissement pour un exploitant), puis code */
+async function signup(page, { kind, firstName, email, venue, next }) {
+  await page.goto(`${BASE}/inscription?type=${kind}${next ? `&suite=${encodeURIComponent(next)}` : ''}`);
+  await page.fill('input[name=firstName]', firstName);
+  await page.fill('input[name=email]', email);
+  if (venue) {
+    await page.fill('input[name=venueName]', venue.name);
+    await page.selectOption('select[name=category]', venue.category);
+  }
+  await page.click('button:has-text("Recevoir mon code")');
+  const code = (await page.locator('[data-testid=dev-code] b').textContent()).trim();
+  await page.fill('input[name=code]', code);
+  await page.click('button:has-text("Créer mon compte")');
+  await page.waitForURL((u) => !u.pathname.startsWith('/inscription'));
+}
+
 const shot = async (page, name) => SHOTS && page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
 
 const browser = await chromium.launch();
@@ -45,13 +61,15 @@ try {
   // 2. Exploitant : inscription et fiche
   const pctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const partner = await pctx.newPage();
-  await login(partner, partnerEmail, '/pro');
-  ok(partner.url().endsWith('/pro'), 'Connexion exploitant par code');
-  await partner.fill('input[name=name]', venueName);
-  await partner.selectOption('select[name=category]', 'escape');
-  await partner.click('button:has-text("Créer ma fiche")');
-  await partner.waitForURL(/\/pro\/etablissement/);
-  ok(await partner.locator('text=Fiche créée').isVisible(), 'Fiche créée en brouillon');
+  // Se connecter avec un email inconnu renvoie vers l'inscription
+  await partner.goto(`${BASE}/connexion`);
+  await partner.fill('input[name=email]', partnerEmail);
+  await partner.click('button:has-text("Recevoir mon code")');
+  await partner.waitForSelector('text=Aucun compte avec cet email.');
+  ok(true, 'Connexion refusée pour un email sans compte, lien vers l’inscription');
+  await signup(partner, { kind: 'exploitant', firstName: 'Sophie', email: partnerEmail, venue: { name: venueName, category: 'escape' } });
+  ok(/\/pro\/etablissement/.test(partner.url()), 'Inscription exploitant : arrive directement sur sa fiche');
+  ok(await partner.locator('text=Fiche créée').isVisible(), 'Fiche créée en brouillon avec l’inscription');
   await partner.fill('textarea[name=description]', 'Deux salles immersives de 60 minutes au cœur de Mons, de 2 à 6 joueurs, idéal entre amis.');
   await partner.fill('input[name=address]', 'Rue de la Chaussée 1, 7000 Mons');
   await partner.fill('input[name=price]', '25');
@@ -118,17 +136,18 @@ try {
   await buyer.locator('.slot:not(.full)').first().click();
   await buyer.click('.sticky-cta a:has-text("Réserver")');
   await buyer.waitForURL(/\/reserver/);
-  await buyer.click('a:has-text("Continuer")');
+  await buyer.click('a:has-text("Créer mon compte et réserver")');
+  await buyer.waitForURL(/\/inscription/);
   const buyerEmail = `client.${stamp}@test.be`;
+  await buyer.fill('input[name=firstName]', 'Camille');
   await buyer.fill('input[name=email]', buyerEmail);
   await buyer.click('button:has-text("Recevoir mon code")');
   const code = (await buyer.locator('[data-testid=dev-code] b').textContent()).trim();
   await buyer.fill('input[name=code]', code);
-  await buyer.click('button:has-text("Me connecter")');
+  await buyer.click('button:has-text("Créer mon compte")');
   await buyer.waitForURL(/\/reserver/);
-  ok(true, 'Le client revient sur sa réservation après connexion');
+  ok(true, 'Inscription client au milieu de la réservation, retour sur la réservation');
   await shot(buyer, '07-paiement');
-  await buyer.fill('input[name=firstName]', 'Camille');
   await buyer.click('button:has-text("Payer")');
   await buyer.waitForURL(/\/billets\//);
   ok(await buyer.locator('h1:has-text("C’est réservé !")').isVisible(), 'Réservation confirmée, billet affiché');
@@ -138,19 +157,41 @@ try {
   await buyer.goto(`${BASE}/billets`);
   ok(await buyer.locator(`text=${ticket}`).isVisible(), 'Le billet apparaît dans « Tes billets »');
 
-  // 7. L'exploitant valide l'arrivée avec le code
+  // 7. Le gérant ajoute une personne à l'accueil
+  const staffEmail = `accueil.${stamp}@test.be`;
+  await partner.goto(`${BASE}/pro/equipe`);
+  await partner.fill('form input[name=email]', staffEmail);
+  await partner.fill('form input[name=firstName]', 'Lucas');
+  await partner.click('button:has-text("Ajouter à l’équipe")');
+  await partner.waitForSelector('text=Lucas ajouté à l’accueil');
+  ok(true, 'Le gérant ajoute Lucas à l’accueil');
   await partner.goto(`${BASE}/pro`);
-  await partner.fill('input[name=code]', ticket.toLowerCase());
-  await partner.click('form button:has-text("Valider")');
-  await partner.waitForSelector('text=Camille validé');
-  ok(true, 'Arrivée validée à l’accueil avec le code');
-  await partner.fill('input[name=code]', ticket);
-  await partner.click('form button:has-text("Valider")');
-  await partner.waitForSelector('text=déjà validé');
-  ok(true, 'Un même code ne peut pas être validé deux fois');
-  await shot(partner, '09-pro-accueil');
+  ok(await partner.locator('text=Rendement').isVisible(), 'Le gérant voit le rendement');
 
-  // 8. Sécurité : un client ne peut pas ouvrir le back-office
+  // 8. L'accueil se connecte : il ne voit que la validation des arrivées
+  const sctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const staff = await sctx.newPage();
+  await login(staff, staffEmail, '/');
+  ok(new URL(staff.url()).pathname === '/pro', 'Un compte exploitant arrive sur son espace après connexion');
+  ok(!(await staff.locator('text=Rendement').count()), 'L’accueil ne voit pas le rendement');
+  await staff.goto(`${BASE}/pro/creneaux`);
+  ok(new URL(staff.url()).pathname === '/pro', 'L’accueil ne peut pas ouvrir les créneaux');
+  await staff.fill('input[name=code]', ticket.toLowerCase());
+  await staff.click('form button:has-text("Valider")');
+  await staff.waitForSelector('text=Camille validé');
+  ok(true, 'L’accueil valide l’arrivée avec le code');
+  await staff.fill('input[name=code]', ticket);
+  await staff.click('form button:has-text("Valider")');
+  await staff.waitForSelector('text=déjà validé');
+  ok(true, 'Un même code ne peut pas être validé deux fois');
+  await shot(staff, '09-accueil');
+
+  // 9. Profil client : historique et infos
+  await buyer.goto(`${BASE}/profil`);
+  ok(await buyer.locator('h1:has-text("Camille")').isVisible(), 'Le profil client affiche le prénom');
+  await shot(buyer, '10-profil');
+
+  // 10. Sécurité : un compte non admin ne peut pas ouvrir le back-office
   const res2 = await partner.goto(`${BASE}/admin`);
   ok(res2.status() === 404, 'Le back-office est fermé aux non-admins');
   console.log('\nTout est bon.');

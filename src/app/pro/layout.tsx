@@ -9,7 +9,8 @@ import { firstPhotos } from '@/lib/venues';
 export const metadata = { title: 'Espace exploitant' };
 
 export default async function ProLayout({ children }: { children: React.ReactNode }) {
-  const { user, mine, current } = await getProContext();
+  const { user, mine, current, role } = await getProContext();
+  const navRole = role === 'owner' || user.isAdmin ? 'owner' : 'staff';
 
   if (!current) {
     return (
@@ -39,14 +40,19 @@ export default async function ProLayout({ children }: { children: React.ReactNod
           </span>
         </div>
         <VenueSwitcher items={items} currentId={current.venue.id} id="venue-switch-side" />
-        <ProNav variant="side" />
+        <ProNav variant="side" role={navRole} />
+        {navRole === 'owner' && (
         <div style={{ marginTop: 'auto', padding: 14, borderRadius: 14, background: 'rgba(255,178,26,0.1)' }}>
           <b className="small" style={{ color: 'var(--amber)', letterSpacing: '0.04em' }}>FORMULE DÉCOUVERTE</b>
           <p className="small" style={{ color: '#E4E1F5', marginTop: 4 }}>15 % par réservation honorée. Rien à payer si personne ne vient.</p>
         </div>
-        <div className="row" style={{ padding: '0 6px' }}>
+        )}
+        <div className="row" style={{ padding: '0 6px', marginTop: navRole === 'owner' ? 0 : 'auto' }}>
           <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--primary)', display: 'grid', placeItems: 'center', fontWeight: 700 }}>{who.charAt(0).toUpperCase()}</span>
-          <span className="grow small" style={{ color: '#C9C5E6' }}>{who}</span>
+          <span className="grow small" style={{ color: '#C9C5E6', display: 'flex', flexDirection: 'column' }}>
+            {who}
+            <em style={{ fontStyle: 'normal', color: '#8F8AB8' }}>{navRole === 'owner' ? 'Gérant' : 'Accueil'}</em>
+          </span>
           <Link href="/" title="Voir l’app client" style={{ color: '#C9C5E6' }}><IconCompass size={18} /></Link>
         </div>
       </aside>
@@ -66,7 +72,7 @@ export default async function ProLayout({ children }: { children: React.ReactNod
           </div>
         )}
         <main className="pro-content">{children}</main>
-        <ProNav variant="tabs" />
+        <ProNav variant="tabs" role={navRole} />
       </div>
     </div>
   );

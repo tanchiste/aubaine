@@ -10,7 +10,7 @@ import { adminEmails, getMyVenues, requireUser } from '@/lib/auth';
 import { CATEGORY_KEYS, VENUE_COLORS } from '@/lib/categories';
 import { sendMail } from '@/lib/email';
 import { MAX_DISCOUNT, MIN_DISCOUNT } from '@/lib/pricing';
-import { VENUE_COOKIE, slugify } from '@/lib/pro';
+import { VENUE_COOKIE, createDraftVenue } from '@/lib/pro';
 import { checklist, isReady } from '@/lib/venues';
 
 const MAX_PHOTOS = 8;
@@ -23,25 +23,14 @@ async function ownVenue(venueId: string) {
   if (!z.uuid().safeParse(venueId).success) throw new Error('Établissement introuvable.');
   const mine = await getMyVenues(user.id);
   const m = mine.find((x) => x.venue.id === venueId);
-  if (m) return { user, venue: m.venue };
+  if (m && m.role === 'owner') return { user, venue: m.venue };
+  if (m && !user.isAdmin) throw new Error('Réservé au gérant de l’établissement.');
   if (user.isAdmin) {
     const [v] = await db.select().from(venues).where(eq(venues.id, venueId));
     if (v) return { user, venue: v };
   }
   throw new Error('Établissement introuvable.');
 }
-
-/** Réglages de départ selon le type d'activité, modifiables ensuite */
-const DEFAULTS: Record<VenueCategory, { durationMin: number; groupMin: number; groupMax: number; capacity: number; capacityUnit: 'places' | 'groupes'; priceUnit: 'person' | 'session' }> = {
-  escape: { durationMin: 60, groupMin: 2, groupMax: 6, capacity: 1, capacityUnit: 'groupes', priceUnit: 'person' },
-  karting: { durationMin: 15, groupMin: 1, groupMax: 12, capacity: 8, capacityUnit: 'places', priceUnit: 'person' },
-  laser: { durationMin: 20, groupMin: 4, groupMax: 20, capacity: 20, capacityUnit: 'places', priceUnit: 'person' },
-  vr: { durationMin: 30, groupMin: 1, groupMax: 8, capacity: 8, capacityUnit: 'places', priceUnit: 'person' },
-  bowling: { durationMin: 45, groupMin: 1, groupMax: 6, capacity: 4, capacityUnit: 'groupes', priceUnit: 'person' },
-  hache: { durationMin: 60, groupMin: 2, groupMax: 8, capacity: 2, capacityUnit: 'groupes', priceUnit: 'person' },
-  bienetre: { durationMin: 120, groupMin: 1, groupMax: 2, capacity: 1, capacityUnit: 'groupes', priceUnit: 'session' },
-  autre: { durationMin: 60, groupMin: 1, groupMax: 10, capacity: 10, capacityUnit: 'places', priceUnit: 'person' },
-};
 
 export type FormState = { ok?: boolean; error?: string; message?: string };
 
@@ -59,28 +48,18 @@ export async function createVenueAction(_prev: FormState, form: FormData): Promi
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { name, category, city } = parsed.data;
 
-  let slug = slugify(name);
-  const taken = await db.select({ slug: venues.slug }).from(venues).where(sql`${venues.slug} like ${slug + '%'}`);
-  if (taken.some((t) => t.slug === slug)) {
-    let i = 2;
-    while (taken.some((t) => t.slug === `${slug}-${i}`)) i++;
-    slug = `${slug}-${i}`;
-  }
-
-  const color = VENUE_COLORS[Math.floor(Math.random() * VENUE_COLORS.length)];
-  const [v] = await db
-    .insert(venues)
-    .values({ slug, name, category, city, color, ...DEFAULTS[category], priceCents: 0, baseDiscountPct: 25 })
-    .returning({ id: venues.id });
-  await db.insert(venueMembers).values({ venueId: v.id, userId: user.id, role: 'owner' });
-  await db.insert(venueEvents).values({ venueId: v.id, actorId: user.id, action: 'created' });
-  (await cookies()).set(VENUE_COOKIE, v.id, { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 31536000 });
+  const venueId = await createDraftVenue(user.id, { name, category, city });
+  (await cookies()).set(VENUE_COOKIE, venueId, { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 31536000 });
   redirect('/pro/etablissement?nouveau=1');
 }
 
 export async function switchVenueAction(form: FormData) {
-  const { venue } = await ownVenue(String(form.get('venueId')));
-  (await cookies()).set(VENUE_COOKIE, venue.id, { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 31536000 });
+  // Changer d'établissement est permis à tout membre de l'équipe, pas seulement au gérant.
+  const user = await requireUser('/pro');
+  const id = String(form.get('venueId'));
+  const m = (await getMyVenues(user.id)).find((x) => x.venue.id === id);
+  if (!m) return;
+  (await cookies()).set(VENUE_COOKIE, m.venue.id, { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 31536000 });
   revalidatePath('/pro', 'layout');
 }
 

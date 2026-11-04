@@ -3,6 +3,7 @@ import {
   customType,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -49,7 +50,11 @@ export const priceUnit = pgEnum('price_unit', ['person', 'session']);
 /** places : chaque personne prend une place ; groupes : chaque réservation prend une salle/piste entière */
 export const capacityUnit = pgEnum('capacity_unit', ['places', 'groupes']);
 
+/** owner : gérant (tout) ; staff : accueil (valide les arrivées uniquement) */
 export const memberRole = pgEnum('member_role', ['owner', 'staff']);
+
+/** client : cherche des activités ; exploitant : gère un établissement (ou en fait partie) */
+export const accountKind = pgEnum('account_kind', ['client', 'exploitant']);
 
 export const bookingStatus = pgEnum('booking_status', ['confirmed', 'checked_in', 'cancelled', 'no_show']);
 
@@ -58,7 +63,12 @@ export const bookingStatus = pgEnum('booking_status', ['confirmed', 'checked_in'
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
+  kind: accountKind('kind').notNull().default('client'),
   firstName: text('first_name'),
+  lastName: text('last_name'),
+  phone: text('phone'),
+  /** ville préférée, utilisée par défaut dans Explorer */
+  city: text('city'),
   referralCode: text('referral_code').unique(),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
@@ -69,6 +79,8 @@ export const loginCodes = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull(),
     codeHash: text('code_hash').notNull(),
+    /** données d'inscription en attente de vérification du code */
+    payload: jsonb('payload'),
     attempts: integer('attempts').notNull().default(0),
     expiresAt: ts('expires_at').notNull(),
     usedAt: ts('used_at'),
@@ -224,6 +236,8 @@ export const bookings = pgTable(
 );
 
 export type User = typeof users.$inferSelect;
+export type AccountKind = (typeof accountKind.enumValues)[number];
+export type MemberRole = (typeof memberRole.enumValues)[number];
 export type Venue = typeof venues.$inferSelect;
 export type Slot = typeof slots.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;

@@ -50,10 +50,13 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
         <BookForm slotId={slot.id} people={n} total={euros(price.total)} needName={!user.firstName} />
       ) : (
         <div className="stack" style={{ ['--gap' as string]: '10px' }}>
-          <Link className="btn btn-primary btn-lg btn-block" href={`/connexion?suite=${encodeURIComponent(`/reserver?slot=${slot.id}&n=${n}`)}`}>
-            Continuer
+          <Link className="btn btn-primary btn-lg btn-block" href={`/inscription?type=client&suite=${encodeURIComponent(`/reserver?slot=${slot.id}&n=${n}`)}`}>
+            Créer mon compte et réserver
           </Link>
-          <p className="small muted" style={{ textAlign: 'center' }}>Ton compte se crée avec ton email, sans mot de passe : billet, points et parrainage au même endroit.</p>
+          <Link className="btn btn-block" href={`/connexion?suite=${encodeURIComponent(`/reserver?slot=${slot.id}&n=${n}`)}`}>
+            J’ai déjà un compte
+          </Link>
+          <p className="small muted" style={{ textAlign: 'center' }}>Sans mot de passe : un code par email suffit. Billet, points et parrainage au même endroit.</p>
         </div>
       )}
       <p className="small muted" style={{ textAlign: 'center' }}>Annulation gratuite jusqu’à 2 h avant.</p>

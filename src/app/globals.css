@@ -395,3 +395,24 @@ p { margin: 0; }
 @media (min-width: 1100px) {
   .venue-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ---------- Inscription ---------- */
+.auth-switch { text-align: center; font-size: 14px; color: var(--muted); padding-top: 4px; }
+.auth-switch a { font-weight: 700; }
+.choice { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 16px; border: 1.5px solid var(--line); background: #fff; color: var(--ink); text-decoration: none; }
+.choice:hover { border-color: var(--primary); color: var(--ink); box-shadow: 0 0 0 3px var(--primary-soft); }
+.choice b { display: block; font-size: 16px; margin-bottom: 2px; }
+.choice-icon { flex: none; width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); }
+.seg-link { flex: 1; display: grid; place-items: center; height: 38px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
+.seg-link[aria-selected='true'] { background: #fff; color: var(--ink); font-weight: 700; box-shadow: 0 1px 3px rgba(23,20,46,0.12); }
+.nav-auth { display: flex; gap: 8px; align-items: center; }
+.nav-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 800; text-decoration: none; }
+.nav-avatar:hover { color: #fff; background: var(--primary-dark); }
+.perf { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.perf > div { background: var(--soft); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 3px; position: relative; overflow: hidden; }
+.perf span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.perf b { font-family: var(--display); font-weight: 600; font-size: 20px; }
+.perf small { font-size: 12px; color: var(--muted); }
+.perf i { display: block; height: 6px; border-radius: 3px; background: var(--line); margin-top: 4px; position: relative; }
+.perf i::after { content: ''; position: absolute; inset: 0; width: var(--w); border-radius: 3px; background: var(--primary); }
+@media (min-width: 900px) { .perf { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

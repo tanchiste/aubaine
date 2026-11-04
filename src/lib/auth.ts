@@ -6,7 +6,7 @@ import { notFound, redirect } from 'next/navigation';
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { loginCodes, sessions, users, venueMembers, venues } from '@/db/schema';
+import { loginCodes, sessions, users, venueMembers, venues, type AccountKind, type VenueCategory } from '@/db/schema';
 import { loginCodeMail, sendMail } from './email';
 
 const SESSION_COOKIE = 'aub_session';
@@ -15,7 +15,14 @@ const CODE_TTL_MIN = 10;
 const MAX_ATTEMPTS = 5;
 const MAX_CODES_PER_HOUR = 5;
 
-export type CurrentUser = { id: string; email: string; firstName: string | null; isAdmin: boolean };
+export type CurrentUser = { id: string; email: string; firstName: string | null; kind: AccountKind; isAdmin: boolean };
+
+/** Ce qu'on garde le temps que le nouvel inscrit tape son code */
+export type SignupPayload = {
+  kind: AccountKind;
+  firstName: string;
+  venue?: { name: string; category: VenueCategory; city: string };
+};
 
 function secret(): string {
   const s = process.env.AUTH_SECRET;
@@ -45,12 +52,21 @@ export function adminEmails(): string[] {
     .filter(Boolean);
 }
 
-type Result = { ok: true; devCode?: string } | { ok: false; error: string };
+type Result = { ok: true; devCode?: string } | { ok: false; error: string; reason?: 'no_account' | 'exists' };
 
-export async function requestLoginCode(rawEmail: string): Promise<Result> {
+/**
+ * Envoie un code à 6 chiffres.
+ * Connexion (sans `signup`) : le compte doit exister. Inscription : il ne doit pas exister.
+ */
+export async function requestLoginCode(rawEmail: string, signup?: SignupPayload): Promise<Result> {
   const parsed = emailSchema.safeParse(rawEmail);
   if (!parsed.success) return { ok: false, error: 'Adresse email invalide.' };
   const email = parsed.data;
+
+  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+  if (signup && existing) return { ok: false, error: 'Un compte existe déjà avec cet email.', reason: 'exists' };
+  if (!signup && !existing && !adminEmails().includes(email))
+    return { ok: false, error: 'Aucun compte avec cet email.', reason: 'no_account' };
 
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -62,6 +78,7 @@ export async function requestLoginCode(rawEmail: string): Promise<Result> {
   await db.insert(loginCodes).values({
     email,
     codeHash: codeHash(email, code),
+    payload: signup ?? null,
     expiresAt: new Date(Date.now() + CODE_TTL_MIN * 60_000),
   });
   try {
@@ -72,7 +89,11 @@ export async function requestLoginCode(rawEmail: string): Promise<Result> {
   return { ok: true, devCode: showDevCode() ? code : undefined };
 }
 
-export async function verifyLoginCode(rawEmail: string, rawCode: string): Promise<Result> {
+export type VerifyResult =
+  | { ok: true; user: { id: string; kind: AccountKind }; created: boolean; signup: SignupPayload | null }
+  | { ok: false; error: string };
+
+export async function verifyLoginCode(rawEmail: string, rawCode: string): Promise<VerifyResult> {
   const parsed = emailSchema.safeParse(rawEmail);
   const code = rawCode.replace(/\D/g, '');
   if (!parsed.success || code.length !== 6) return { ok: false, error: 'Code incorrect.' };
@@ -94,7 +115,12 @@ export async function verifyLoginCode(rawEmail: string, rawCode: string): Promis
   }
   await db.update(loginCodes).set({ usedAt: new Date() }).where(eq(loginCodes.id, row.id));
 
-  await db.insert(users).values({ email }).onConflictDoNothing({ target: users.email });
+  const signup = (row.payload as SignupPayload | null) ?? null;
+  const inserted = await db
+    .insert(users)
+    .values({ email, kind: signup?.kind ?? 'client', firstName: signup?.firstName || null })
+    .onConflictDoNothing({ target: users.email })
+    .returning({ id: users.id });
   const [user] = await db.select().from(users).where(eq(users.email, email));
 
   const token = crypto.randomBytes(32).toString('base64url');
@@ -107,7 +133,7 @@ export async function verifyLoginCode(rawEmail: string, rawCode: string): Promis
     path: '/',
     expires: expiresAt,
   });
-  return { ok: true };
+  return { ok: true, user: { id: user.id, kind: user.kind }, created: inserted.length > 0, signup: inserted.length > 0 ? signup : null };
 }
 
 export async function logout(): Promise<void> {
@@ -122,7 +148,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const [row] = await db
-    .select({ id: users.id, email: users.email, firstName: users.firstName })
+    .select({ id: users.id, email: users.email, firstName: users.firstName, kind: users.kind })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.id, sha256(token)), gt(sessions.expiresAt, new Date())))

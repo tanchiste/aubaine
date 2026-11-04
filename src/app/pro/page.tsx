@@ -12,10 +12,11 @@ import { checklist, isReady } from '@/lib/venues';
 import { togglePauseAction } from './actions';
 import { CreateVenueForm } from './CreateVenueForm';
 import { CheckInBox } from './CheckInBox';
-import { checkInIdAction } from './checkin';
+import { checkInIdAction, noShowAction } from './checkin';
+import { venueStats } from '@/lib/stats';
 
 export default async function ProHome() {
-  const { user, current } = await getProContext();
+  const { user, current, role } = await getProContext();
 
   if (!current) {
     return (
@@ -30,6 +31,7 @@ export default async function ProHome() {
   }
 
   const v = current.venue;
+  const isOwner = role === 'owner' || user.isAdmin;
   const today = brusselsDate();
   const [[{ photos }], todays, [month]] = await Promise.all([
     db.select({ photos: sql<number>`count(*)::int` }).from(venuePhotos).where(eq(venuePhotos.venueId, v.id)),
@@ -41,7 +43,7 @@ export default async function ProHome() {
       .where(
         and(
           eq(bookings.venueId, v.id),
-          inArray(bookings.status, ['confirmed', 'checked_in']),
+          inArray(bookings.status, ['confirmed', 'checked_in', 'no_show']),
           sql`${slots.startsAt} >= (${today}::date)::timestamp at time zone 'Europe/Brussels'`,
           sql`${slots.startsAt} < (${today}::date + 1)::timestamp at time zone 'Europe/Brussels'`,
         ),
@@ -58,9 +60,12 @@ export default async function ProHome() {
         ),
       ),
   ]);
+  const stats = isOwner ? await venueStats(v.id, COMMISSION_PCT) : null;
+  const expected = todays.filter((b) => b.status !== 'no_show');
   const items = checklist(v, photos);
   const ready = isReady(items);
-  const people = todays.reduce((s, b) => s + b.people, 0);
+  const people = expected.reduce((s, b) => s + b.people, 0);
+  const now = Date.now();
   const who = user.firstName ?? '';
 
   return (
@@ -68,8 +73,11 @@ export default async function ProHome() {
       <header className="stack" style={{ ['--gap' as string]: '4px' }}>
         <span className="small muted" style={{ fontWeight: 600 }}>{capitalize(longDate(today))}</span>
         <h1 className="display" style={{ fontSize: 24 }}>Bonjour{who ? ` ${who}` : ''}</h1>
+        {!isOwner && <p className="muted">Accueil de {v.name} : valide les arrivées avec le code du billet.</p>}
       </header>
+      {!isOwner && <CheckInBox />}
 
+      {isOwner && (<>
       <section className="card stack" aria-label="État de la fiche">
         <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
           <h2 style={{ fontSize: 16, fontWeight: 800 }}>{v.name}</h2>
@@ -124,12 +132,31 @@ export default async function ProHome() {
         </div>
       </section>
 
+      {stats && (
+        <section className="card stack" aria-labelledby="perf-title">
+          <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <h2 id="perf-title" style={{ fontSize: 15, fontWeight: 800 }}>Rendement</h2>
+            <span className="small muted">30 derniers jours</span>
+          </div>
+          <div className="perf">
+            <div><span>Remplissage des créneaux</span><b>{stats.fillPct} %</b><i style={{ ['--w' as string]: `${Math.min(100, stats.fillPct)}%` }} /></div>
+            <div><span>Chiffre ajouté (net)</span><b>{euros(stats.netCents)}</b><small>{stats.bookings} réservation{stats.bookings > 1 ? 's' : ''}</small></div>
+            <div><span>Clients différents</span><b>{stats.clients}</b><small>panier moyen {euros(stats.avgBasketCents)}</small></div>
+            <div><span>Absences</span><b>{stats.noShowPct} %</b><small>des réservations</small></div>
+          </div>
+          <p className="small" style={{ color: 'var(--ink-2)' }}>
+            7 prochains jours : <b>{stats.upcomingFree} {v.capacityUnit === 'places' ? 'places' : 'salles'} encore libres</b> sur {stats.upcomingSlots} créneau{stats.upcomingSlots > 1 ? 'x' : ''} ouvert{stats.upcomingSlots > 1 ? 's' : ''}.{' '}
+            <Link href="/pro/creneaux">Gérer mes créneaux</Link>
+          </p>
+        </section>
+      )}
       {(v.status === 'published' || v.status === 'paused') && <CheckInBox />}
+      </>)}
 
       <section className="card stack" aria-labelledby="arr-title" style={{ padding: '6px 16px' }}>
         <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10 }}>
           <h2 id="arr-title" style={{ fontSize: 15, fontWeight: 800 }}>Arrivées du jour</h2>
-          <span className="small muted">{todays.filter((b) => b.status === 'checked_in').length} / {todays.length} arrivé</span>
+          <span className="small muted">{todays.filter((b) => b.status === 'checked_in').length} / {expected.length} arrivé</span>
         </div>
         {todays.length === 0 ? (
           <p className="muted small" style={{ padding: '6px 0 14px' }}>Aucune réservation aujourd’hui pour l’instant.</p>
@@ -144,11 +171,21 @@ export default async function ProHome() {
                 </span>
                 {b.status === 'checked_in' ? (
                   <span className="pill pill-ok">Arrivé</span>
+                ) : b.status === 'no_show' ? (
+                  <span className="pill pill-deal">Absent</span>
                 ) : (
-                  <form action={checkInIdAction}>
-                    <input type="hidden" name="bookingId" value={b.id} />
-                    <button className="btn btn-sm" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>Valider</button>
-                  </form>
+                  <span className="row" style={{ ['--gap' as string]: '6px' }}>
+                    {b.startsAt.getTime() < now && (
+                      <form action={noShowAction}>
+                        <input type="hidden" name="bookingId" value={b.id} />
+                        <button className="btn btn-sm btn-danger">Absent</button>
+                      </form>
+                    )}
+                    <form action={checkInIdAction}>
+                      <input type="hidden" name="bookingId" value={b.id} />
+                      <button className="btn btn-sm" style={{ borderColor: 'var(--primary)', color: 'var(--primary)' }}>Valider</button>
+                    </form>
+                  </span>
                 )}
               </li>
             ))}

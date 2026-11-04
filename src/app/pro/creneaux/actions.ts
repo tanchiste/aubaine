@@ -14,6 +14,7 @@ async function ownVenue(venueId: string) {
   const mine = await getMyVenues(user.id);
   const m = mine.find((x) => x.venue.id === venueId);
   if (!m) throw new Error('Établissement introuvable.');
+  if (m.role !== 'owner') throw new Error('Réservé au gérant de l’établissement.');
   return m.venue;
 }
 

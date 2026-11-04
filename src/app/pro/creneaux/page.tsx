@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { Deal } from '@/components/ui';
 import { addDays, brusselsDate, dayChip, isDateStr, longDate, capitalize, timeLabel } from '@/lib/format';
-import { getProContext } from '@/lib/pro';
+import { requireOwnerContext } from '@/lib/pro';
 import { deleteSlotAction, toggleSlotAction } from './actions';
 import { SlotForm } from './SlotForm';
 
@@ -13,7 +13,7 @@ export const metadata = { title: 'Créneaux' };
 type Row = { id: string; starts_at: Date; capacity: number; discount_pct: number; is_open: boolean; used: number; n: number };
 
 export default async function SlotsPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
-  const { current } = await getProContext('/pro/creneaux');
+  const { current } = await requireOwnerContext('/pro/creneaux');
   if (!current) redirect('/pro');
   const v = current.venue;
   const today = brusselsDate();

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { Checklist } from '@/components/Checklist';
 import { StatusPill } from '@/components/ui';
 import { IconEye } from '@/components/icons';
-import { getProContext } from '@/lib/pro';
+import { requireOwnerContext } from '@/lib/pro';
 import { checklist, isReady, photoList } from '@/lib/venues';
 import { PhotoManager } from './PhotoManager';
 import { SubmitBox } from './SubmitBox';
@@ -12,7 +12,7 @@ import { VenueForm } from './VenueForm';
 export const metadata = { title: 'Mon établissement' };
 
 export default async function VenueSettingsPage({ searchParams }: { searchParams: Promise<{ nouveau?: string; envoye?: string }> }) {
-  const { current } = await getProContext('/pro/etablissement');
+  const { current } = await requireOwnerContext('/pro/etablissement');
   if (!current) redirect('/pro');
   const v = current.venue;
   const photos = await photoList(v.id);

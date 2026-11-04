@@ -51,6 +51,15 @@ try {
   ok((await client.locator('.venue-card').count()) > 0, 'Explorer affiche des établissements');
   await shot(client, '01-explorer');
   ok((await client.locator('.venue-card .cat-tag').count()) > 0, 'Chaque carte affiche son type d’activité');
+  await client.click('.picker-btn');
+  const cityItems = await client.locator('.picker-menu a').all();
+  let reachable = 0;
+  for (const it of cityItems) {
+    const b = await it.boundingBox();
+    if (await client.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.picker-menu a'), [b.x + b.width / 2, b.y + b.height / 2])) reachable++;
+  }
+  ok(cityItems.length > 1 && reachable === cityItems.length, `Le menu des villes est entièrement visible et cliquable (${reachable}/${cityItems.length})`);
+  await client.keyboard.press('Escape');
 
   // Recherche : le type d'activité est trouvé, avec suggestions pendant la frappe
   await client.fill('input[aria-label="Rechercher une activité"]', 'kart');

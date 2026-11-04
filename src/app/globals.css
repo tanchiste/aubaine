@@ -516,10 +516,12 @@ p { margin: 0; }
 /* En-tête d'Explorer : bandeau nuit, grande horloge à droite */
 .hero-band {
   --dial-ring: #3A28D4; --dial-tick: rgba(255, 255, 255, 0.32); --dial-wedge: #FF6A4D; --dial-hub: #FFFFFF;
-  position: relative; overflow: hidden; background: var(--night); color: #fff;
+  position: relative; background: var(--night); color: #fff;
   padding: 14px 16px 18px; border-radius: 0 0 26px 26px; display: flex; flex-direction: column; gap: 14px;
 }
-.hero-top { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+.hero-top { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; }
+/* L'horloge déborde du bandeau et y est coupée, sans couper les menus déroulants */
+.hero-dial-clip { position: absolute; inset: 0; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .hero-copy { position: relative; z-index: 1; max-width: 66%; display: flex; flex-direction: column; gap: 8px; }
 .hero-band .explore-title { color: #fff; }
 .hero-live { font-size: 14px; font-weight: 600; color: #D6D2F2; }
@@ -536,6 +538,7 @@ p { margin: 0; }
 @media (min-width: 900px) {
   .hero-band { margin-top: 20px; border-radius: 28px; padding: 30px 36px 32px; gap: 18px; }
   .hero-top { justify-content: flex-start; }
+  .hero-band .picker-menu { left: 0; right: auto; }
   .hero-copy { max-width: 640px; }
   .hero-band .explore-title { font-size: 44px; }
   .hero-live { font-size: 15px; }

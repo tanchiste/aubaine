@@ -127,7 +127,9 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           </h1>
           <p className="hero-live">{live}</p>
         </div>
-        <HeroDial pct={liveBest} />
+        <div className="hero-dial-clip" aria-hidden="true">
+          <HeroDial pct={liveBest} />
+        </div>
         <SearchBox
           key={q ?? ''}
           defaultValue={q}

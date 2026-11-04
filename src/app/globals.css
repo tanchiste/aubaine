@@ -454,3 +454,31 @@ p { margin: 0; }
 .hour-quick { display: flex; flex-wrap: wrap; gap: 6px; }
 .hour-quick .chip { height: 32px; font-size: 12px; cursor: pointer; font-family: inherit; }
 @media (max-width: 899px) { .hour-menu { right: auto; left: 0; } }
+
+/* ---------- Téléphone : filtres regroupés dans un panneau ---------- */
+.filter-btn { gap: 6px; cursor: pointer; font-family: inherit; background: var(--night); border-color: var(--night); color: #fff; }
+.filter-btn:hover { color: #fff; background: #2A2648; }
+.filter-count { min-width: 18px; height: 18px; border-radius: 9px; background: var(--amber); color: var(--night); font-size: 11px; font-weight: 800; display: inline-grid; place-items: center; padding: 0 5px; }
+.sheet-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(14,12,28,0.5); display: flex; align-items: flex-end; }
+.sheet { width: 100%; max-height: 88dvh; background: #fff; border-radius: 22px 22px 0 0; display: flex; flex-direction: column; animation: sheet-up 0.18s ease-out; }
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 4px 20px; font-size: 17px; }
+.sheet-head .icon-btn { background: var(--soft); }
+.sheet-body { padding: 10px 20px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; }
+.sheet-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.sheet-options button { height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--line); background: #fff; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.sheet-options button[aria-pressed='true'] { border-color: var(--night); background: var(--night); color: #fff; }
+.sheet-foot { display: flex; gap: 10px; padding: 12px 20px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line-2); }
+.stepper button:disabled { color: #C9C5DA; cursor: not-allowed; }
+
+@media (max-width: 699px) {
+  .filters-row { display: none; }
+  .sort { display: none; }
+  .explore-title { font-size: 21px; }
+  .explore-head { gap: 10px; padding-bottom: 14px; }
+  .filters { gap: 12px; padding-top: 12px; }
+  .day { width: 48px; height: 54px; }
+}
+@media (min-width: 700px) {
+  .filter-btn { display: none; }
+}

@@ -6,6 +6,7 @@ import { Deal, Logo, VenueArt } from '@/components/ui';
 import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
 import { HourPicker } from '@/components/HourPicker';
+import { FilterSheet } from '@/components/FilterSheet';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
@@ -170,6 +171,11 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
         </div>
 
         <nav className="chips" aria-label="Catégories">
+          <FilterSheet
+            base={{ date: base.date, cat: base.cat, q: base.q, ville: base.ville }}
+            current={{ n, moment, de: p.de, a: p.a, sort }}
+            maxPeople={MAX_PEOPLE}
+          />
           <Link className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
             Tout
           </Link>

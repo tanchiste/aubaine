@@ -6,7 +6,8 @@ import { IconBack, IconClock, IconMinus, IconPin, IconPlus, IconUsers } from '@/
 import { getCurrentUser, getMyVenues } from '@/lib/auth';
 import { CATEGORIES } from '@/lib/categories';
 import { addDays, dayChip, euros, longDate, timeLabel } from '@/lib/format';
-import { DAYS_AHEAD, clientParams, withParams } from '@/lib/params';
+import { DAYS_AHEAD, MAX_DAYS, clientParams, withParams } from '@/lib/params';
+import { DatePicker } from '@/components/DatePicker';
 import { quote } from '@/lib/pricing';
 import { photoList, unitsFor, venueBySlug, venueSlotsForDay } from '@/lib/venues';
 
@@ -19,7 +20,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function VenuePage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const p = clientParams(await searchParams);
+  const raw = await searchParams;
+  const p = clientParams(raw);
   const venue = await venueBySlug(slug);
   if (!venue) notFound();
 
@@ -31,7 +33,19 @@ export default async function VenuePage({ params, searchParams }: Props) {
   }
 
   const n = Math.min(venue.groupMax, Math.max(venue.groupMin, p.n));
-  const [photos, slots] = await Promise.all([photoList(venue.id), venueSlotsForDay(venue.id, p.date)]);
+  const [photos, firstSlots] = await Promise.all([photoList(venue.id), venueSlotsForDay(venue.id, p.date)]);
+  // Plus rien aujourd'hui (ou pas de date choisie) : on avance au prochain jour qui a des créneaux.
+  let slots = firstSlots;
+  if (slots.length === 0 && !raw.date) {
+    for (let i = 1; i < 14; i++) {
+      const next = await venueSlotsForDay(venue.id, addDays(p.today, i));
+      if (next.length > 0) {
+        slots = next;
+        p.date = addDays(p.today, i);
+        break;
+      }
+    }
+  }
   const need = unitsFor(venue, n);
   const selected = slots.find((s) => s.id === p.slot && s.remaining >= need) ?? null;
   const base = { date: p.date !== p.today ? p.date : undefined, n: n !== 2 ? n : undefined };
@@ -40,7 +54,8 @@ export default async function VenuePage({ params, searchParams }: Props) {
   const cat = CATEGORIES[venue.category];
 
   return (
-    <article style={{ paddingBottom: selected ? 90 : 0 }}>
+    <article className={`fiche${selected ? ' has-cta' : ''}`}>
+      <div className="fiche-main">
       <div className="hero">
         <VenueArt color={venue.color} style={{ height: '100%' }}>
           {photos.length > 0 && (
@@ -81,14 +96,16 @@ export default async function VenuePage({ params, searchParams }: Props) {
           </a>
         )}
       </div>
+      </div>
 
+      <aside className="fiche-side">
       <section className="section" aria-labelledby="slots-title">
         <div className="section-title">
           <h2 id="slots-title">Créneaux creux</h2>
           <span className="small muted">{longDate(p.date)}</span>
         </div>
         <nav className="days" aria-label="Choisir le jour">
-          {days.map((d) => {
+          {[...days, ...(days.includes(p.date) ? [] : [p.date])].map((d) => {
             const c = dayChip(d, p.today);
             return (
               <Link key={d} className="day" href={withParams(`/lieu/${slug}`, base, { date: d === p.today ? undefined : d })} aria-current={d === p.date ? 'true' : undefined}>
@@ -97,6 +114,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
               </Link>
             );
           })}
+          <DatePicker value={p.date} min={p.today} max={addDays(p.today, MAX_DAYS - 1)} hrefBase={withParams(`/lieu/${slug}`, base, { date: '__DATE__' })} label="Plus tard" />
         </nav>
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="label">Personnes</span>
@@ -160,6 +178,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
           </Link>
         </div>
       )}
+      </aside>
     </article>
   );
 }

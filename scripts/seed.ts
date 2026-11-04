@@ -47,7 +47,7 @@ const DEMOS: Demo[] = [
     address: 'Place des Grands Prés 3, 7000 Mons',
     description: "Arène de réalité virtuelle en libre déplacement : jusqu'à 8 joueurs dans la même partie, sans câble.",
     durationMin: 30, groupMin: 1, groupMax: 8, capacity: 8, capacityUnit: 'places', price: 20, priceUnit: 'person',
-    discount: 30, color: '#2B8C9E', times: [['12:30', 30], ['14:30', 30], ['16:30', 30]],
+    discount: 30, color: '#2B8C9E', times: [['12:30', 30], ['14:30', 30], ['16:30', 30], ['19:00', 25]],
   },
   {
     slug: 'arena-laser-borinage', name: 'Arena Laser Borinage', category: 'laser', city: 'Mons', area: 'Ghlin',
@@ -75,7 +75,7 @@ const DEMOS: Demo[] = [
     address: 'Boulevard Tirou 70, 6000 Charleroi',
     description: 'Quatre pistes de lancer de haches encadrées par un coach, avec cibles interactives.',
     durationMin: 60, groupMin: 2, groupMax: 8, capacity: 4, capacityUnit: 'groupes', price: 25, priceUnit: 'person',
-    discount: 30, color: '#8C3B2A', times: [['14:00', 30], ['16:00', 30]],
+    discount: 30, color: '#8C3B2A', times: [['14:00', 30], ['16:00', 30], ['18:30', 25]],
   },
   {
     slug: 'cle-de-voute', name: 'Clé de Voûte', category: 'escape', city: 'Mons', area: 'Centre-ville',
@@ -121,13 +121,13 @@ async function main() {
         await tx`insert into venue_members (venue_id, user_id, role) values (${v.id}, ${partner.id}, 'owner')`;
       }
 
-      // Créneaux creux du lundi au vendredi, sur les 14 prochains jours (heure de Bruxelles).
+      // Créneaux creux du lundi au vendredi, sur les 30 prochains jours (heure de Bruxelles).
       for (const [time, pct] of d.times) {
         await tx`
           insert into slots (venue_id, starts_at, capacity, discount_pct)
           select ${v.id}, (day::date + ${time}::time) at time zone 'Europe/Brussels', ${d.capacity}, ${pct}
           from generate_series((now() at time zone 'Europe/Brussels')::date,
-                               (now() at time zone 'Europe/Brussels')::date + 13, interval '1 day') as day
+                               (now() at time zone 'Europe/Brussels')::date + 29, interval '1 day') as day
           where extract(isodow from day) <= 5`;
       }
     }

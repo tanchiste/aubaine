@@ -1,58 +1,78 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { CityPicker } from '@/components/CityPicker';
+import { DatePicker } from '@/components/DatePicker';
 import { Deal, Logo, VenueArt } from '@/components/ui';
-import { IconMinus, IconPin, IconPlus, IconSearch } from '@/components/icons';
+import { IconBolt, IconMinus, IconPlus, IconSearch } from '@/components/icons';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
-import { addDays, dayChip, euros, timeLabel } from '@/lib/format';
-import { DAYS_AHEAD, MAX_PEOPLE, clientParams, withParams } from '@/lib/params';
+import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
+import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
-import { explorer, lastMinute } from '@/lib/venues';
+import { bestDeals, cities, explorer, lastMinute } from '@/lib/venues';
 
-export default async function ExplorerPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const p = clientParams(await searchParams);
-  const { today, n, category, q } = p;
+type SP = Record<string, string | string[] | undefined>;
+
+export default async function ExplorerPage({ searchParams }: { searchParams: Promise<SP> }) {
+  const raw = await searchParams;
+  const saved = (await cookies()).get(CITY_COOKIE)?.value;
+  const p = clientParams(raw, saved ? decodeURIComponent(saved) : undefined);
+  const { today, n, category, q, moment, sort, city } = p;
+  const filters = { people: n, category, q, city };
+
   let date = p.date;
-  const [first, lm] = await Promise.all([
-    explorer({ date, people: n, category, q }),
-    date === today && !category && !q ? lastMinute(today, n) : Promise.resolve([]),
+  const [first, lm, deals, cityList] = await Promise.all([
+    explorer({ ...filters, date, moment, sort }),
+    date === today && !category && !q && !moment ? lastMinute(today, n, city) : Promise.resolve([]),
+    q ? Promise.resolve([]) : bestDeals({ ...filters, today }),
+    cities(),
   ]);
+
   // Le soir, plus rien aujourd'hui : on montre directement demain.
   let items = first;
   let rolled = false;
-  if (items.length === 0 && date === today) {
-    const tomorrow = addDays(today, 1);
-    const next = await explorer({ date: tomorrow, people: n, category, q });
+  if (items.length === 0 && date === today && !raw.date) {
+    const next = await explorer({ ...filters, date: addDays(today, 1), moment, sort });
     if (next.length > 0) {
       items = next;
-      date = tomorrow;
+      date = addDays(today, 1);
       rolled = true;
     }
   }
-  const base = { date: date !== today ? date : undefined, n: n !== 2 ? n : undefined, cat: category, q };
+
+  const base = {
+    date: date !== today ? date : undefined,
+    n: n !== 2 ? n : undefined,
+    cat: category,
+    q,
+    moment,
+    tri: sort !== 'remise' ? sort : undefined,
+    ville: city ?? (raw.ville === 'tout' ? 'tout' : undefined),
+  };
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(today, i));
+  const extraDay = !days.includes(date) ? date : null;
+  const hrefFor: Record<string, string> = { tout: withParams('/', base, { ville: 'tout' }) };
+  for (const c of cityList) hrefFor[c.city] = withParams('/', base, { ville: c.city });
+  const place = city ?? 'du Hainaut';
 
   return (
-    <>
-      <header className="client-head">
+    <div className="explore">
+      <header className="client-head explore-head">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <Logo />
-          <span className="chip" style={{ background: 'var(--soft)', gap: 5 }}>
-            <IconPin size={16} /> Hainaut
-          </span>
+          <span className="only-mobile"><Logo /></span>
+          <CityPicker cities={cityList} current={city} hrefFor={hrefFor} />
         </div>
-        <h1 className="display" style={{ fontSize: 26, lineHeight: 1.15 }}>
-          Les loisirs de Mons,
+        <h1 className="display explore-title">
+          Les loisirs {city ? `de ${place}` : place},
           <br />à prix creux.
         </h1>
         <form className="search" role="search" action="/">
           <IconSearch size={18} />
-          <input className="input" type="search" name="q" defaultValue={q} placeholder="Karting, escape game, Mons…" aria-label="Rechercher une activité" />
-          {base.date && <input type="hidden" name="date" value={base.date} />}
-          {base.n && <input type="hidden" name="n" value={base.n} />}
-          {category && <input type="hidden" name="cat" value={category} />}
+          <input className="input" type="search" name="q" defaultValue={q} placeholder="Karting, escape game, bowling…" aria-label="Rechercher une activité" />
+          {Object.entries(base).map(([k, v]) => (k !== 'q' && v !== undefined ? <input key={k} type="hidden" name={k} value={String(v)} /> : null))}
         </form>
       </header>
 
-      <div className="section">
+      <section className="filters" aria-label="Filtres">
         <nav className="days" aria-label="Choisir le jour">
           {days.map((d) => {
             const c = dayChip(d, today);
@@ -63,19 +83,38 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               </Link>
             );
           })}
+          {extraDay && (
+            <Link className="day" href={withParams('/', base)} aria-current="true">
+              <span>{dayChip(extraDay, today).top}</span>
+              <b>{dayChip(extraDay, today).num}</b>
+            </Link>
+          )}
+          <DatePicker value={date} min={today} max={addDays(today, MAX_DAYS - 1)} hrefBase={withParams('/', base, { date: '__DATE__' })} label="Plus tard" />
         </nav>
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <span className="label">Combien ?</span>
-          <div className="stepper">
-            <Link href={withParams('/', base, { n: n - 1 === 2 ? undefined : n - 1 })} aria-label="Une personne de moins" aria-disabled={n <= 1 ? 'true' : undefined}>
-              <IconMinus size={16} strokeWidth={2} />
-            </Link>
-            <b>{n} pers.</b>
-            <Link href={withParams('/', base, { n: n + 1 === 2 ? undefined : n + 1 })} aria-label="Une personne de plus" aria-disabled={n >= MAX_PEOPLE ? 'true' : undefined}>
-              <IconPlus size={16} strokeWidth={2} />
-            </Link>
+
+        <div className="filters-row">
+          <div className="row" style={{ ['--gap' as string]: '12px' }}>
+            <span className="label">Combien ?</span>
+            <div className="stepper">
+              <Link href={withParams('/', base, { n: n - 1 === 2 ? undefined : n - 1 })} aria-label="Une personne de moins" aria-disabled={n <= 1 ? 'true' : undefined}>
+                <IconMinus size={16} strokeWidth={2} />
+              </Link>
+              <b>{n} pers.</b>
+              <Link href={withParams('/', base, { n: n + 1 === 2 ? undefined : n + 1 })} aria-label="Une personne de plus" aria-disabled={n >= MAX_PEOPLE ? 'true' : undefined}>
+                <IconPlus size={16} strokeWidth={2} />
+              </Link>
+            </div>
           </div>
+          <nav className="seg" aria-label="Moment de la journée">
+            <Link href={withParams('/', base, { moment: undefined })} aria-current={!moment ? 'true' : undefined}>Toute la journée</Link>
+            {(Object.keys(MOMENTS) as Moment[]).map((m) => (
+              <Link key={m} href={withParams('/', base, { moment: m })} aria-current={moment === m ? 'true' : undefined}>
+                {MOMENTS[m].label}
+              </Link>
+            ))}
+          </nav>
         </div>
+
         <nav className="chips" aria-label="Catégories">
           <Link className="chip" href={withParams('/', base, { cat: undefined })} aria-current={!category ? 'true' : undefined}>
             Tout
@@ -86,7 +125,42 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
             </Link>
           ))}
         </nav>
-      </div>
+      </section>
+
+      {deals.length > 0 && (
+        <section className="section" aria-labelledby="deals-title">
+          <div className="section-title">
+            <h2 id="deals-title" className="row" style={{ ['--gap' as string]: '6px' }}>
+              <IconBolt size={18} /> Meilleurs deals
+            </h2>
+            <span className="small muted">7 prochains jours{city ? `, ${city}` : ''}</span>
+          </div>
+          <div className="deals">
+            {deals.map(({ venue, photoId, slot }) => {
+              const d = brusselsDate(slot.startsAt);
+              const unit = discounted(venue.priceCents, slot.discountPct);
+              return (
+                <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, date: d === today ? undefined : d, slot: slot.id })}>
+                  <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
+                    <Deal pct={slot.discountPct} />
+                  </VenueArt>
+                  <span className="deal-body">
+                    <b className="deal-name">{venue.name}</b>
+                    <span className="small muted">
+                      {relativeDay(d, today)} · {timeLabel(slot.startsAt)} · {venue.city}
+                    </span>
+                    <span className="row" style={{ ['--gap' as string]: '6px', marginTop: 2 }}>
+                      <b style={{ fontSize: 16 }}>{euros(unit)}</b>
+                      <s className="small muted">{euros(venue.priceCents)}</s>
+                      <span className="small muted">{venue.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {lm.length > 0 && (
         <section className="section" aria-labelledby="lm-title">
@@ -96,7 +170,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           </div>
           <div className="last-minute">
             {lm.map(({ venue, photoId, slot }) => (
-              <Link key={venue.id} className="lm-card" href={withParams(`/lieu/${venue.slug}`, base, { slot: slot.id })}>
+              <Link key={venue.id} className="lm-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, slot: slot.id })}>
                 <VenueArt color={venue.color} photoId={photoId} />
                 <span className="grow stack" style={{ ['--gap' as string]: '2px' }}>
                   <b style={{ fontSize: 14 }}>{venue.name}</b>
@@ -112,67 +186,76 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
       )}
 
       <section className="section" aria-labelledby="list-title">
-        <div className="section-title">
-          <h2 id="list-title">{q ? `Résultats pour « ${q} »` : category ? CATEGORIES[category].label : rolled ? 'Demain' : 'Créneaux creux'}</h2>
-          <span className="small muted">
-            {items.length} lieu{items.length > 1 ? 'x' : ''}
-          </span>
+        <div className="section-title" style={{ flexWrap: 'wrap', rowGap: 8 }}>
+          <h2 id="list-title">
+            {q ? `Résultats pour « ${q} »` : rolled ? 'Demain' : date === today ? 'Aujourd’hui' : longDate(date).replace(/^./, (c) => c.toUpperCase())}
+            <span className="small muted" style={{ fontWeight: 500, marginLeft: 8 }}>
+              {items.length} lieu{items.length > 1 ? 'x' : ''}
+            </span>
+          </h2>
+          <nav className="sort" aria-label="Trier">
+            {(Object.keys(SORTS) as Sort[]).map((s) => (
+              <Link key={s} href={withParams('/', base, { tri: s === 'remise' ? undefined : s })} aria-current={sort === s ? 'true' : undefined}>
+                {SORTS[s]}
+              </Link>
+            ))}
+          </nav>
         </div>
-
         {rolled && <p className="notice notice-primary small">Plus de créneau creux aujourd’hui : voici ceux de demain.</p>}
+
         {items.length === 0 ? (
           <div className="empty card">
             <b>Rien de disponible pour ce choix</b>
-            <p className="small">Essaie un autre jour, un autre nombre de personnes ou une autre catégorie.</p>
-            <Link className="btn btn-sm" href="/">
-              Tout afficher
-            </Link>
+            <p className="small">Essaie un autre jour, un autre moment, une autre ville ou un autre nombre de personnes.</p>
+            <Link className="btn btn-sm" href="/?ville=tout">Tout afficher</Link>
           </div>
         ) : (
-          items.map(({ venue, photoId, slots }) => {
-            const best = Math.max(...slots.map((s) => s.discountPct));
-            const from = Math.min(...slots.map((s) => discounted(venue.priceCents, s.discountPct)));
-            const shown = slots.slice(0, 3);
-            return (
-              <article key={venue.id} className="venue-card">
-                <Link className="venue-link" href={withParams(`/lieu/${venue.slug}`, base)}>
-                  <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
-                    <Deal pct={best} />
-                  </VenueArt>
-                  <div className="body">
-                    <div className="row" style={{ alignItems: 'flex-start' }}>
-                      <div className="grow stack" style={{ ['--gap' as string]: '2px' }}>
-                        <h3 style={{ fontSize: 17, fontWeight: 800 }}>{venue.name}</h3>
-                        <span className="small muted">
-                          {CATEGORIES[venue.category].label} · {venue.area ? `${venue.area}, ` : ''}
-                          {venue.city}
-                        </span>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span className="small muted">dès</span>{' '}
-                        <b style={{ fontSize: 17 }}>{euros(from)}</b>
-                        <div className="small muted">{venue.priceUnit === 'session' ? 'la séance' : 'par pers.'}</div>
+          <div className="venue-grid">
+            {items.map(({ venue, photoId, slots }) => {
+              const best = Math.max(...slots.map((s) => s.discountPct));
+              const from = Math.min(...slots.map((s) => discounted(venue.priceCents, s.discountPct)));
+              const shown = slots.slice(0, 3);
+              const link = withParams(`/lieu/${venue.slug}`, { n: base.n, date: base.date ?? (rolled ? date : undefined) });
+              return (
+                <article key={venue.id} className="venue-card">
+                  <Link className="venue-link" href={link}>
+                    <VenueArt color={venue.color} photoId={photoId} alt={venue.name}>
+                      <Deal pct={best} />
+                    </VenueArt>
+                    <div className="body">
+                      <div className="row" style={{ alignItems: 'flex-start' }}>
+                        <div className="grow stack" style={{ ['--gap' as string]: '2px' }}>
+                          <h3 style={{ fontSize: 17, fontWeight: 800 }}>{venue.name}</h3>
+                          <span className="small muted">
+                            {CATEGORIES[venue.category].label} · {venue.area ? `${venue.area}, ` : ''}
+                            {venue.city}
+                          </span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span className="small muted">dès</span> <b style={{ fontSize: 17 }}>{euros(from)}</b>
+                          <div className="small muted">{venue.priceUnit === 'session' ? 'la séance' : 'par pers.'}</div>
+                        </div>
                       </div>
                     </div>
+                  </Link>
+                  <div className="mini-slots" style={{ padding: '0 14px 14px' }}>
+                    {shown.map((s) => (
+                      <Link key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
+                        {timeLabel(s.startsAt)} <em>−{s.discountPct} %</em>
+                      </Link>
+                    ))}
+                    {slots.length > shown.length && (
+                      <Link className="mini-slot" href={link}>
+                        +{slots.length - shown.length}
+                      </Link>
+                    )}
                   </div>
-                </Link>
-                <div className="mini-slots" style={{ padding: '0 14px 14px' }}>
-                  {shown.map((s) => (
-                    <Link key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, base, { slot: s.id })}>
-                      {timeLabel(s.startsAt)} <em>−{s.discountPct} %</em>
-                    </Link>
-                  ))}
-                  {slots.length > shown.length && (
-                    <Link className="mini-slot" href={withParams(`/lieu/${venue.slug}`, base)}>
-                      +{slots.length - shown.length}
-                    </Link>
-                  )}
-                </div>
-              </article>
-            );
-          })
+                </article>
+              );
+            })}
+          </div>
         )}
       </section>
-    </>
+    </div>
   );
 }

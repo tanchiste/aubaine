@@ -58,3 +58,15 @@ export function ago(d: Date, now: Date = new Date()): string {
   const days = Math.round(h / 24);
   return days === 1 ? 'hier' : `il y a ${days} jours`;
 }
+
+const hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' });
+/** Heure (0 à 23) à Bruxelles */
+export const brusselsHour = (d: Date) => parseInt(hourFmt.format(d), 10);
+
+const dayShort = new Intl.DateTimeFormat('fr-BE', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
+/** « Aujourd’hui », « Demain », « jeu. 6 » */
+export function relativeDay(dateStr: string, today: string): string {
+  if (dateStr === today) return 'Aujourd’hui';
+  if (dateStr === addDays(today, 1)) return 'Demain';
+  return dayShort.format(new Date(dateStr + 'T12:00:00Z'));
+}

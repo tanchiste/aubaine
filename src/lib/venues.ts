@@ -2,7 +2,9 @@ import 'server-only';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { venuePhotos, venues, type Venue, type VenueCategory } from '@/db/schema';
-import { MAX_DISCOUNT, MIN_DISCOUNT } from './pricing';
+import { MAX_DISCOUNT, MIN_DISCOUNT, discounted } from './pricing';
+import { addDays, brusselsHour } from './format';
+import { MOMENTS, type Moment, type Sort } from './params';
 
 export type SlotView = { id: string; startsAt: Date; discountPct: number; capacity: number; remaining: number };
 
@@ -71,16 +73,25 @@ export async function photoList(venueId: string) {
 }
 
 export type ExplorerItem = { venue: Venue; photoId: string | null; slots: SlotView[] };
+type Filters = { people: number; category?: VenueCategory; q?: string; city?: string };
 
-export async function explorer(opts: { date: string; people: number; category?: VenueCategory; q?: string }) {
+/** Établissements en ligne qui correspondent aux filtres et acceptent ce nombre de personnes */
+async function publishedVenues(f: Filters) {
   const conds = [eq(venues.status, 'published')];
-  if (opts.category) conds.push(eq(venues.category, opts.category));
-  if (opts.q) {
-    const like = `%${opts.q.replace(/[%_\\]/g, (m) => '\\' + m)}%`;
+  if (f.category) conds.push(eq(venues.category, f.category));
+  if (f.city) conds.push(sql`lower(${venues.city}) = lower(${f.city})`);
+  if (f.q) {
+    const like = `%${f.q.replace(/[%_\\]/g, (m) => '\\' + m)}%`;
     conds.push(sql`(${venues.name} ilike ${like} or ${venues.city} ilike ${like} or ${venues.area} ilike ${like})`);
   }
   const list = await db.select().from(venues).where(and(...conds));
-  const fit = list.filter((v) => opts.people >= v.groupMin && opts.people <= v.groupMax);
+  return list.filter((v) => f.people >= v.groupMin && f.people <= v.groupMax);
+}
+
+const minPrice = (v: Venue, slots: SlotView[]) => Math.min(...slots.map((s) => discounted(v.priceCents, s.discountPct)));
+
+export async function explorer(opts: Filters & { date: string; moment?: Moment; sort?: Sort }) {
+  const fit = await publishedVenues(opts);
   const [rows, photos] = await Promise.all([
     slotsForDay(
       opts.date,
@@ -88,11 +99,16 @@ export async function explorer(opts: { date: string; people: number; category?: 
     ),
     firstPhotos(fit.map((v) => v.id)),
   ]);
+  const range = opts.moment ? MOMENTS[opts.moment] : null;
 
   const byVenue = new Map<string, SlotView[]>();
   for (const r of rows) {
     const v = fit.find((x) => x.id === r.venue_id)!;
     if (Number(r.remaining) < unitsFor(v, opts.people)) continue;
+    if (range) {
+      const h = brusselsHour(new Date(r.starts_at));
+      if (h < range.from || h >= range.to) continue;
+    }
     const arr = byVenue.get(r.venue_id) ?? [];
     arr.push(toSlot(r));
     byVenue.set(r.venue_id, arr);
@@ -101,13 +117,57 @@ export async function explorer(opts: { date: string; people: number; category?: 
   const items: ExplorerItem[] = fit
     .filter((v) => byVenue.has(v.id))
     .map((v) => ({ venue: v, photoId: photos.get(v.id) ?? null, slots: byVenue.get(v.id)! }));
-  // Les plus grosses remises d'abord
-  items.sort((a, b) => Math.max(...b.slots.map((s) => s.discountPct)) - Math.max(...a.slots.map((s) => s.discountPct)));
+  const sort = opts.sort ?? 'remise';
+  items.sort((a, b) => {
+    if (sort === 'heure') return a.slots[0].startsAt.getTime() - b.slots[0].startsAt.getTime();
+    if (sort === 'prix') return minPrice(a.venue, a.slots) - minPrice(b.venue, b.slots);
+    return Math.max(...b.slots.map((s) => s.discountPct)) - Math.max(...a.slots.map((s) => s.discountPct));
+  });
   return items;
 }
 
+export type Deal = { venue: Venue; photoId: string | null; slot: SlotView };
+
+/** Les plus grosses remises des 7 prochains jours : un créneau par lieu, le meilleur */
+export async function bestDeals(f: Filters & { today: string; limit?: number }): Promise<Deal[]> {
+  const fit = await publishedVenues(f);
+  if (fit.length === 0) return [];
+  const rows = await db.execute<SlotRow>(sql`
+    select s.id, s.venue_id, s.starts_at, s.discount_pct, s.capacity, ${REMAINING} as remaining
+    from slots s
+    join venues v on v.id = s.venue_id
+    where s.is_open and s.starts_at > now() + interval '30 minutes'
+      and s.starts_at < ${dayEnd(addDays(f.today, 6))}
+      and s.venue_id in (${sql.join(
+        fit.map((v) => sql`${v.id}::uuid`),
+        sql`, `,
+      )})
+    order by s.discount_pct desc, s.starts_at asc`);
+  const photos = await firstPhotos(fit.map((v) => v.id));
+  const out: Deal[] = [];
+  for (const r of rows) {
+    if (out.some((d) => d.venue.id === r.venue_id)) continue;
+    const v = fit.find((x) => x.id === r.venue_id)!;
+    if (Number(r.remaining) < unitsFor(v, f.people)) continue;
+    out.push({ venue: v, photoId: photos.get(v.id) ?? null, slot: toSlot(r) });
+    if (out.length >= (f.limit ?? 8)) break;
+  }
+  return out;
+}
+
+/** Communes où au moins un établissement est en ligne */
+export async function cities(): Promise<{ city: string; n: number }[]> {
+  const rows = await db
+    .select({ city: venues.city, n: sql<number>`count(*)::int` })
+    .from(venues)
+    .where(eq(venues.status, 'published'))
+    .groupBy(venues.city)
+    .orderBy(sql`count(*) desc`, venues.city);
+  return rows;
+}
+
 /** Créneaux du jour qui démarrent dans les 3 prochaines heures */
-export async function lastMinute(today: string, people: number) {
+export async function lastMinute(today: string, people: number, city?: string) {
   const rows = (await slotsForDay(today)).filter((r) => new Date(r.starts_at).getTime() - Date.now() < 3 * 3_600_000);
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.venue_id))];
@@ -119,6 +179,7 @@ export async function lastMinute(today: string, people: number) {
   for (const r of rows) {
     const v = list.find((x) => x.id === r.venue_id)!;
     if (people < v.groupMin || people > v.groupMax || Number(r.remaining) < unitsFor(v, people)) continue;
+    if (city && v.city.toLowerCase() !== city.toLowerCase()) continue;
     if (out.some((o) => o.venue.id === v.id)) continue;
     out.push({ venue: v, photoId: photos.get(v.id) ?? null, slot: toSlot(r) });
   }

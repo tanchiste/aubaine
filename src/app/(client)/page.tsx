@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { CityPicker } from '@/components/CityPicker';
 import { DatePicker } from '@/components/DatePicker';
 import { Deal, Logo, VenueArt } from '@/components/ui';
-import { IconBolt, IconMinus, IconPlus } from '@/components/icons';
+import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
@@ -52,6 +52,48 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     tri: sort !== 'remise' ? sort : undefined,
     ville: city ?? (raw.ville === 'tout' ? 'tout' : undefined),
   };
+  // Filtres actifs, affichés avec une croix pour les retirer un par un.
+  const active = [
+    q ? { key: 'q', label: `« ${q} »`, remove: withParams('/', base, { q: undefined }) } : null,
+    category ? { key: 'cat', label: CATEGORIES[category].short, remove: withParams('/', base, { cat: undefined }) } : null,
+    moment ? { key: 'moment', label: MOMENTS[moment].label, remove: withParams('/', base, { moment: undefined }) } : null,
+  ].filter((f): f is { key: string; label: string; remove: string } => f !== null);
+
+  // Rien trouvé : on teste ce qui donnerait des résultats en relâchant un filtre à la fois.
+  const fixes: { key: string; label: string; href: string; n: number }[] = [];
+  if (items.length === 0) {
+    // Le soir, aujourd'hui est vide : on regarde aussi demain pour chaque alternative.
+    const canRoll = date === today && !raw.date;
+    const attempt = async (key: string, label: string, over: Record<string, string | undefined>, run: (d: string) => Promise<unknown[]>) => {
+      const r = await run(date);
+      if (r.length) return { key, label, href: withParams('/', base, over), n: r.length };
+      if (canRoll) {
+        const d = addDays(today, 1);
+        const r2 = await run(d);
+        if (r2.length) return { key, label: `${label}, demain`, href: withParams('/', base, { ...over, date: d }), n: r2.length };
+      }
+      return null;
+    };
+    const found = await Promise.all([
+      category && q ? attempt('cat', `« ${q} » dans toutes les activités`, { cat: undefined }, (d) => explorer({ ...filters, category: undefined, date: d, moment, sort })) : null,
+      q ? attempt('q', category ? `Tous les lieux ${CATEGORIES[category].short}` : 'Tous les lieux, sans la recherche', { q: undefined }, (d) => explorer({ ...filters, q: undefined, date: d, moment, sort })) : null,
+      moment ? attempt('moment', 'Toute la journée', { moment: undefined }, (d) => explorer({ ...filters, date: d, sort })) : null,
+      city ? attempt('city', 'Tout le Hainaut', { ville: 'tout' }, (d) => explorer({ ...filters, city: undefined, date: d, moment, sort })) : null,
+    ]);
+    for (const f of found) if (f) fixes.push(f);
+    for (let i = canRoll ? 2 : 1; i <= 6; i++) {
+      const d = addDays(date, i);
+      if (d > addDays(today, MAX_DAYS - 1)) break;
+      const r = await explorer({ ...filters, date: d, moment, sort });
+      if (r.length) {
+        fixes.push({ key: 'day', label: `Le même choix ${relativeDay(d, today).toLowerCase()}`, href: withParams('/', base, { date: d }), n: r.length });
+        break;
+      }
+    }
+  }
+  const what = [q ? `« ${q} »` : 'ce choix', category ? `en ${CATEGORIES[category].short}` : null, moment ? `le ${MOMENTS[moment].label.toLowerCase()}` : null, city ? `à ${city}` : null].filter(Boolean).join(' ');
+  const when = date === today ? 'aujourd’hui' : relativeDay(date, today) === 'Demain' ? 'demain' : longDate(date);
+
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(today, i));
   const extraDay = !days.includes(date) ? date : null;
   const hrefFor: Record<string, string> = { tout: withParams('/', base, { ville: 'tout' }) };
@@ -73,7 +115,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           key={q ?? ''}
           defaultValue={q}
           city={city}
-          searchHref={withParams('/', base, { q: '__Q__' })}
+          searchHref={withParams('/', { ...base, cat: undefined }, { q: '__Q__' })}
           categoryHref={withParams('/', { ...base, q: undefined }, { cat: '__CAT__' })}
         />
       </header>
@@ -122,15 +164,29 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
         </div>
 
         <nav className="chips" aria-label="Catégories">
-          <Link className="chip" href={withParams('/', base, { cat: undefined })} aria-current={!category ? 'true' : undefined}>
+          <Link className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
             Tout
           </Link>
           {CATEGORY_KEYS.filter((k) => k !== 'autre').map((k) => (
-            <Link key={k} className="chip" href={withParams('/', base, { cat: k })} aria-current={category === k ? 'true' : undefined}>
+            <Link key={k} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
               {CATEGORIES[k].short}
             </Link>
           ))}
         </nav>
+        {active.length > 0 && (
+          <div className="active-filters" aria-label="Filtres actifs">
+            {active.map((f) => (
+              <Link key={f.key} className="filter-pill" href={f.remove} aria-label={`Retirer le filtre ${f.label}`}>
+                {f.label} <IconX size={12} />
+              </Link>
+            ))}
+            {active.length > 1 && (
+              <Link className="small" style={{ fontWeight: 700 }} href={withParams('/', { ...base, q: undefined, cat: undefined, moment: undefined })}>
+                Tout effacer
+              </Link>
+            )}
+          </div>
+        )}
       </section>
 
       {deals.length > 0 && (
@@ -210,11 +266,25 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
         </div>
         {rolled && <p className="notice notice-primary small">Plus de créneau creux aujourd’hui : voici ceux de demain.</p>}
 
-        {items.length === 0 && others.length > 0 ? null : items.length === 0 ? (
-          <div className="empty card">
-            <b>Rien de disponible pour ce choix</b>
-            <p className="small">Essaie un autre jour, un autre moment, une autre ville ou un autre nombre de personnes.</p>
-            <Link className="btn btn-sm" href="/?ville=tout">Tout afficher</Link>
+        {items.length === 0 ? (
+          <div className="empty card" style={{ alignItems: 'stretch', textAlign: 'left' }}>
+            <b>Rien pour {what} {when}.</b>
+            {fixes.length > 0 ? (
+              <>
+                <p className="small">Essaie plutôt :</p>
+                <div className="fixes">
+                  {fixes.map((f) => (
+                    <Link key={f.key} className="fix" href={f.href}>
+                      <span className="grow">{f.label}</span>
+                      <span className="small muted">{f.n} lieu{f.n > 1 ? 'x' : ''}</span>
+                      <IconChevronRight size={16} />
+                    </Link>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="small">Aucun créneau ne correspond pour l’instant. De nouveaux lieux arrivent chaque semaine.</p>
+            )}
           </div>
         ) : (
           <div className="venue-grid">

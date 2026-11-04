@@ -61,6 +61,14 @@ try {
   await client.press('input[aria-label="Rechercher une activité"]', 'Enter');
   await client.waitForURL(/q=karting/);
   ok((await client.locator('text=Kart\'Ohm').count()) > 0, 'Rechercher « karting » affiche Kart’Ohm');
+  await client.click('.chips a:has-text("Escape")');
+  await client.waitForURL((u) => u.searchParams.get('cat') === 'escape');
+  ok(!new URL(client.url()).searchParams.get('q'), 'Choisir une catégorie remplace la recherche');
+  await client.goto(BASE + '/?q=kart&cat=escape');
+  ok(await client.locator('.filter-pill:has-text("Escape")').isVisible(), 'Les filtres actifs sont affichés');
+  await client.click('.fix:has-text("dans toutes les activités")');
+  await client.waitForURL((u) => !u.searchParams.get('cat'));
+  ok((await client.locator('text=Kart\'Ohm').count()) > 0, 'Page vide : une alternative en un clic retrouve Kart’Ohm');
   await client.goto(BASE + '/?q=' + encodeURIComponent('spa'));
   ok((await client.locator('text=Bulle d\'O').count()) > 0, 'Rechercher « spa » trouve le bien-être (sans accent ni mot exact)');
   await client.goto(BASE + '/');

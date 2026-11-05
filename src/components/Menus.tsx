@@ -33,7 +33,7 @@ export function TimeMenu({ label, shortLabel, presets, de, preciseHref, pill = f
   const router = useRouter();
   return (
     <div className="picker" ref={ref}>
-      <button type="button" className={pill ? 'qpill' : 'tool-btn'} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" data-menu="time" className={pill ? 'qpill' : 'tool-btn'} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <IconClock size={16} />
         <span className="lbl-long">{label}</span>
         <span className="lbl-short">{shortLabel ?? label}</span>
@@ -154,18 +154,19 @@ export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pick
 }
 
 /** Téléphone : le nombre de personnes, en pastille (un choix, un tap) */
-export function PeopleMenu({ n, hrefs }: { n: number; hrefs: string[] }) {
+export function PeopleMenu({ n, hrefs, tool = false }: { n: number; hrefs: string[]; tool?: boolean }) {
   const { open, setOpen, ref } = usePopover();
   return (
     <div className="picker" ref={ref}>
-      <button type="button" className="qpill" aria-haspopup="dialog" aria-expanded={open} aria-label={`${n} personne${n > 1 ? 's' : ''}`} onClick={() => setOpen((o) => !o)}>
+      <button type="button" data-menu="people" className={tool ? 'tool-btn' : 'qpill'} aria-haspopup="dialog" aria-expanded={open} aria-label={`${n} personne${n > 1 ? 's' : ''}`} onClick={() => setOpen((o) => !o)}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="9" cy="8.5" r="3.2" />
           <path d="M3 19.5c.7-3.3 3-5 6-5s5.3 1.7 6 5" />
           <circle cx="17" cy="9.5" r="2.5" />
           <path d="M16.5 14.6c2.3.2 3.9 1.8 4.5 4.4" />
         </svg>
-        <span>{n}</span>
+        <span>{tool ? `${n} personne${n > 1 ? 's' : ''}` : n}</span>
+        {tool && <IconChevronDown size={16} />}
       </button>
       {open && (
         <div className="picker-menu qmenu qmenu-people" role="dialog" aria-label="Combien de personnes">

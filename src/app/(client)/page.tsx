@@ -4,7 +4,7 @@ import { CityPicker } from '@/components/CityPicker';
 import { DatePicker } from '@/components/DatePicker';
 import { Deal, Logo, VenueArt } from '@/components/ui';
 import { HeroDial } from '@/components/brand';
-import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
+import { IconBolt, IconChevronRight, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
 import { DateMenu, PeopleMenu, SortMenu, TimeMenu } from '@/components/Menus';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
@@ -101,6 +101,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     ? `${liveDay} : ${liveCount} créneau${liveCount > 1 ? 'x' : ''} creux, jusqu’à −${liveBest} %`
     : `${liveDay} : pas de créneau creux pour ce choix`;
 
+  const peopleHrefs = Array.from({ length: 12 }, (_, i) => withParams('/', base, { n: i + 1 === 2 ? undefined : i + 1 }));
   const timePresets = [
                 { key: 'all', label: 'Toute la journée', hint: '', href: withParams('/', base, { moment: undefined, de: undefined, a: undefined }), active: !hours },
                 ...(Object.keys(MOMENTS) as Moment[]).map((m) => ({
@@ -156,7 +157,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
             tomorrowHref={withParams('/', base, { date: addDays(today, 1) })}
             pickHref={withParams('/', base, { date: '__DATE__' })}
           />
-          <PeopleMenu n={n} hrefs={Array.from({ length: 12 }, (_, i) => withParams('/', base, { n: i + 1 === 2 ? undefined : i + 1 }))} />
+          <PeopleMenu n={n} hrefs={peopleHrefs} />
           <TimeMenu
             pill
             label={hours ? hours.label : 'Journée'}
@@ -190,15 +191,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           </div>
           <div className="tool">
             <span className="tool-label">Personnes</span>
-            <div className="stepper">
-              <Link href={withParams('/', base, { n: n - 1 === 2 ? undefined : n - 1 })} aria-label="Une personne de moins" aria-disabled={n <= 1 ? 'true' : undefined}>
-                <IconMinus size={16} strokeWidth={2} />
-              </Link>
-              <b>{n} pers.</b>
-              <Link href={withParams('/', base, { n: n + 1 === 2 ? undefined : n + 1 })} aria-label="Une personne de plus" aria-disabled={n >= MAX_PEOPLE ? 'true' : undefined}>
-                <IconPlus size={16} strokeWidth={2} />
-              </Link>
-            </div>
+            <PeopleMenu tool n={n} hrefs={peopleHrefs} />
           </div>
           <div className="tool">
             <span className="tool-label">Horaire</span>

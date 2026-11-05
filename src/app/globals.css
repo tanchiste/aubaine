@@ -618,3 +618,5 @@ p { margin: 0; }
 
 .lbl-short { display: none; }
 @media (max-width: 699px) { .lbl-long { display: none; } .lbl-short { display: inline; } }
+
+.toolbar .qmenu-people { left: 0; right: auto; }

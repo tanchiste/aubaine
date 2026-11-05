@@ -88,14 +88,18 @@ try {
   // Heure précise (ordinateur) : « Vers 16 h » puis une plage 14 h – 16 h
   const dk = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await dk.goto(`${BASE}/?ville=tout`);
-  await dk.click('.tool-btn');
+  await dk.click('.toolbar [data-menu=time]');
   ok((await dk.locator('.menu-time a').count()) === 4 && (await dk.locator('.menu-time select').count()) === 1, 'Menu Horaire simple : 4 moments et un seul choix « vers une heure »');
   await dk.selectOption('.menu-time select', '16');
   await dk.waitForURL((u) => u.searchParams.get('de') === '16' && u.searchParams.get('a') === '18');
   let hrs = [...(await dk.locator('.deal-card .deal-body .small').allTextContents()), ...(await dk.locator('.venue-card .mini-slot').allTextContents())]
     .map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
   ok(hrs.length > 0 && hrs.every((h) => h >= 16 && h < 18), `« Vers 16 h » : créneaux entre 16 h et 18 h (${hrs.length} vus)`);
-  ok(await dk.locator('.tool-btn:has-text("16 h – 18 h")').isVisible(), 'La plage horaire s’affiche dans le bouton Horaire');
+  ok(await dk.locator('.toolbar [data-menu=time]:has-text("16 h – 18 h")').isVisible(), 'La plage horaire s’affiche dans le bouton Horaire');
+  await dk.click('.toolbar [data-menu=people]');
+  await dk.click('.toolbar .people-grid a:has-text("5")');
+  await dk.waitForURL((u) => u.searchParams.get('n') === '5');
+  ok(await dk.locator('.toolbar [data-menu=people]:has-text("5 personnes")').isVisible(), 'Ordinateur : le nombre de personnes se choisit directement dans une grille');
   await dk.close();
 
   // Téléphone : une seule ligne de trois pastilles (jour, personnes, horaire)

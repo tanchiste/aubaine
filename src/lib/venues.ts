@@ -254,6 +254,21 @@ export async function venueSlotsForDay(venueId: string, date: string) {
   return (await slotsForDay(date, [venueId])).map(toSlot);
 }
 
+/** Créneaux à venir d'un établissement sur plusieurs jours d'affilée (une seule requête pour toute la bande de dates) */
+export async function venueSlotsRange(venueId: string, from: string, days: number) {
+  const rows = await db.execute<SlotRow>(sql`
+    select ${SLOT_COLS}
+    from slots s
+    join venues v on v.id = s.venue_id
+    join offers o on o.id = s.offer_id
+    where v.status = 'published' and s.is_open and o.is_active
+      and s.venue_id = ${venueId}::uuid
+      and s.starts_at > now()
+      and s.starts_at >= ${dayStart(from)} and s.starts_at < (${from}::date + ${days}::int)::timestamp at time zone 'Europe/Brussels'
+    order by s.starts_at`);
+  return [...rows].map(toSlot);
+}
+
 /* ---------- Checklist de validation ---------- */
 
 export type CheckItem = { key: string; label: string; detail: string; state: 'ok' | 'ko' | 'info' };

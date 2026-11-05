@@ -105,9 +105,51 @@ const DEMOS: Demo[] = [
   },
 ];
 
+/**
+ * Photos de démonstration : banque d'images Unsplash (licence Unsplash, usage libre, commercial compris).
+ * Téléchargées au moment du seed (build Vercel) et stockées comme les photos envoyées par les exploitants.
+ * Sans réseau, la démo garde simplement ses pictogrammes.
+ */
+const PHOTOS: Record<string, string[]> = {
+  kartohm: ['1505570554449-69ce7d4fa36b', '1640084347692-e8f6b84caa7c', '1578401449027-acdcfd8137e9'],
+  'le-cachot': ['1514820402329-de527fdd2e6d', '1696013910376-c56f76dd8178', '1523485474951-78fcd9344f0c'],
+  'nebula-vr': ['1538388149542-5e24932d11a8', '1758526213714-a0743a6c101f', '1639174326326-6e2ef8d8ae39'],
+  'arena-laser-borinage': ['1768256722157-b1a012c18918', '1593349480785-6ba0825f57f5', '1781186992124-54dffff0b79c'],
+  'strike-7000': ['1650314200456-a19942fd1c19', '1680479611085-2a075987da25', '1660129071363-d13390de351f'],
+  'bulle-d-o': ['1773423386572-4ad451dc6c26', '1773423386509-b57f17224b30', '1779103281095-d9112dee0541'],
+  'hache-et-cie': ['1778177886070-df68bce22530', '1545476745-9211a9e7cca8', '1501543590094-4362fb5caf3e'],
+  'cle-de-voute': ['1584985429980-a9db9a42b324', '1592744254966-58c65cfd2e69', '1618588845382-4267677cfc11'],
+  'laser-spot': ['1783038746321-ba486725d4ae', '1576916385844-befd8945138c', '1615286922420-c6b348ffbd62'],
+};
+
+type Photo = { data: Buffer; mime: string };
+
+async function download(id: string): Promise<Photo | null> {
+  const url = `https://images.unsplash.com/photo-${id}?w=1200&h=800&fit=crop&crop=entropy&q=70&fm=webp`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    const mime = res.headers.get('content-type') ?? '';
+    if (!res.ok || !mime.startsWith('image/')) return null;
+    return { data: Buffer.from(await res.arrayBuffer()), mime: mime.split(';')[0] };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPhotos(): Promise<Map<string, Photo[]>> {
+  const entries = await Promise.all(
+    Object.entries(PHOTOS).map(async ([slug, ids]) => [slug, (await Promise.all(ids.map(download))).filter((p): p is Photo => p !== null)] as const),
+  );
+  const total = entries.reduce((n, [, list]) => n + list.length, 0);
+  console.log(total ? `Photos de démo : ${total} téléchargées.` : 'Photos de démo indisponibles (pas de réseau) : la démo garde ses pictogrammes.');
+  return new Map(entries);
+}
+
 async function main() {
   const url = process.env.DATABASE_URL ?? 'postgres://aubaine:aubaine@localhost:5432/aubaine';
   const sql = postgres(url, { prepare: false, max: 1, onnotice: () => {} });
+
+  const photos = await fetchPhotos();
 
   await sql.begin(async (tx) => {
     await tx`delete from bookings where venue_id in (select id from venues where is_demo)`;
@@ -128,6 +170,10 @@ async function main() {
           ${d.priceUnit}, ${d.discount}, ${d.color}, ${status}, true,
           now() - interval '3 hours', ${status === 'published' ? sql`now() - interval '30 days'` : null})
         returning id`;
+
+      for (const [pos, ph] of (photos.get(d.slug) ?? []).entries()) {
+        await tx`insert into venue_photos (venue_id, position, mime, width, height, data) values (${v.id}, ${pos}, ${ph.mime}, 1200, 800, ${ph.data})`;
+      }
 
       if (d.slug === 'kartohm') {
         await tx`insert into venue_members (venue_id, user_id, role) values (${v.id}, ${partner.id}, 'owner')`;

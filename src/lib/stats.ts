@@ -32,14 +32,14 @@ export async function venueStats(venueId: string, commissionPct: number): Promis
       where s.venue_id = ${venueId} and s.starts_at < now() and s.starts_at > now() - interval '30 days'
     ),
     pb as (
-      select b.*, case when v.capacity_unit = 'places' then b.people else 1 end as units
-      from bookings b join venues v on v.id = b.venue_id
+      select b.*, case when o.capacity_unit = 'places' then b.people else 1 end as units
+      from bookings b join slots s2 on s2.id = b.slot_id join offers o on o.id = s2.offer_id
       where b.venue_id = ${venueId} and b.slot_id in (select id from past) and b.status <> 'cancelled'
     ),
     up as (
       select s.capacity - coalesce((
-        select sum(case when v.capacity_unit = 'places' then b.people else 1 end)
-        from bookings b join venues v on v.id = b.venue_id
+        select sum(case when o.capacity_unit = 'places' then b.people else 1 end)
+        from bookings b join offers o on o.id = s.offer_id
         where b.slot_id = s.id and b.status in ('confirmed', 'checked_in')), 0) as free
       from slots s
       where s.venue_id = ${venueId} and s.is_open and s.starts_at > now() and s.starts_at < now() + interval '7 days'

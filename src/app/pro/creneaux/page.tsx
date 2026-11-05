@@ -2,103 +2,198 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { Deal } from '@/components/ui';
-import { addDays, brusselsDate, dayChip, isDateStr, longDate, capitalize, timeLabel } from '@/lib/format';
+import { IconBack, IconChevronRight, IconPlus } from '@/components/icons';
+import { addDays, brusselsDate, capitalize, euros, isDateStr, longDate, timeLabel } from '@/lib/format';
+import { discounted } from '@/lib/pricing';
 import { requireOwnerContext } from '@/lib/pro';
-import { deleteSlotAction, toggleSlotAction } from './actions';
-import { SlotForm } from './SlotForm';
+import { offersOf } from '@/lib/venues';
+import { EditSlotForm, NewSlotForm, type EditorOffer } from './SlotEditor';
 
 export const metadata = { title: 'Créneaux' };
 
-type Row = { id: string; starts_at: Date; capacity: number; discount_pct: number; is_open: boolean; used: number; n: number };
+type Row = {
+  id: string;
+  offer_id: string;
+  starts_at: Date;
+  capacity: number;
+  discount_pct: number;
+  is_open: boolean;
+  used: number;
+  nbook: number;
+};
 
-export default async function SlotsPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+/** Une couleur par prestation, pour les distinguer d'un coup d'œil dans le planning */
+const OFFER_COLORS = ['#3A28D4', '#E89A00', '#1E7F57', '#CF3520', '#2B8C9E', '#5B2A86', '#8C3B2A', '#1F6F8B'];
+
+/** Lundi de la semaine qui contient cette date */
+const mondayOf = (d: string) => addDays(d, -((new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7));
+const dayHead = new Intl.DateTimeFormat('fr-BE', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
+const rangeFmt = new Intl.DateTimeFormat('fr-BE', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+export default async function SlotsPage({ searchParams }: { searchParams: Promise<{ semaine?: string; date?: string; creneau?: string }> }) {
+  const sp = await searchParams;
   const { current } = await requireOwnerContext('/pro/creneaux');
   if (!current) redirect('/pro');
-  const v = current.venue;
+  const venue = current.venue;
   const today = brusselsDate();
-  const sp = await searchParams;
-  const date = isDateStr(sp.date) && sp.date >= today ? sp.date : today;
-  const days = Array.from({ length: 14 }, (_, i) => addDays(today, i));
+  const focus = isDateStr(sp.date) ? sp.date : isDateStr(sp.semaine) ? sp.semaine : today;
+  const week = mondayOf(focus);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(week, i));
 
-  const rows = [
-    ...(await db.execute<Row>(sql`
-      select s.id, s.starts_at, s.capacity, s.discount_pct, s.is_open,
-        coalesce(sum(case when b.status in ('confirmed','checked_in') then (case when ${v.capacityUnit} = 'places' then b.people else 1 end) end), 0)::int as used,
-        count(b.id) filter (where b.status in ('confirmed','checked_in'))::int as n
-      from slots s left join bookings b on b.slot_id = s.id
-      where s.venue_id = ${v.id}
-        and s.starts_at >= (${date}::date)::timestamp at time zone 'Europe/Brussels'
-        and s.starts_at < (${date}::date + 1)::timestamp at time zone 'Europe/Brussels'
-      group by s.id order by s.starts_at`)),
-  ];
-  const open = rows.filter((r) => r.is_open);
-  const cap = open.reduce((s, r) => s + r.capacity, 0);
-  const used = open.reduce((s, r) => s + r.used, 0);
-  const unit = v.capacityUnit === 'places' ? 'places' : 'salles';
+  const [offerMap, rows] = await Promise.all([
+    offersOf([venue.id]),
+    db.execute<Row>(sql`
+      select s.id, s.offer_id, s.starts_at, s.capacity, s.discount_pct, s.is_open,
+        coalesce(sum(case when o.capacity_unit = 'places' then b.people else 1 end) filter (where b.status in ('confirmed', 'checked_in')), 0)::int as used,
+        (count(b.id) filter (where b.status in ('confirmed', 'checked_in')))::int as nbook
+      from slots s
+      join offers o on o.id = s.offer_id
+      left join bookings b on b.slot_id = s.id
+      where s.venue_id = ${venue.id}
+        and s.starts_at >= (${week}::date)::timestamp at time zone 'Europe/Brussels'
+        and s.starts_at < (${week}::date + 7)::timestamp at time zone 'Europe/Brussels'
+      group by s.id
+      order by s.starts_at`),
+  ]);
+  const allOffers = offerMap.get(venue.id) ?? [];
+  const toEditor = (o: (typeof allOffers)[number], i: number): EditorOffer => ({
+    id: o.id,
+    name: o.name,
+    priceCents: o.priceCents,
+    priceUnit: o.priceUnit,
+    capacity: o.capacity,
+    capacityUnit: o.capacityUnit,
+    color: OFFER_COLORS[i % OFFER_COLORS.length],
+  });
+  const editorOffers = allOffers.map(toEditor);
+  const active = editorOffers.filter((_, i) => allOffers[i].isActive);
+  const offerById = new Map(editorOffers.map((o) => [o.id, o]));
+  const list = [...rows].map((r) => ({ ...r, startsAt: new Date(r.starts_at), day: brusselsDate(new Date(r.starts_at)) }));
+  const many = active.length > 1;
+  const now = Date.now();
+
+  const editing = sp.creneau ? list.find((r) => r.id === sp.creneau) : undefined;
+  // Le panneau latéral ne s'ouvre que pour créer ou modifier : le reste du temps, la semaine prend toute la place.
+  const panel = editing ? 'edit' : sp.date || active.length === 0 ? 'new' : null;
+  const base = (extra: Record<string, string>) => `/pro/creneaux?${new URLSearchParams({ semaine: week, ...extra }).toString()}`;
+  const total = list.filter((r) => r.is_open && r.startsAt.getTime() > now).length;
+  const filled = list.reduce((s, r) => s + r.used, 0);
+  const cap = list.reduce((s, r) => s + r.capacity, 0);
 
   return (
     <>
-      <header className="stack" style={{ ['--gap' as string]: '4px' }}>
-        <h1 className="display" style={{ fontSize: 22 }}>Créneaux creux</h1>
-        <p className="small muted">{capitalize(longDate(date))} · {open.length} en ligne{cap ? ` · ${Math.round((used / cap) * 100)} % remplis` : ''}</p>
+      <header className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 10 }}>
+        <div className="stack" style={{ ['--gap' as string]: '4px' }}>
+          <h1 className="display" style={{ fontSize: 22 }}>Créneaux</h1>
+          <span className="small muted">
+            {total} créneau{total > 1 ? 'x' : ''} à venir cette semaine · {cap ? Math.round((filled / cap) * 100) : 0} % rempli
+          </span>
+        </div>
+        <div className="slots-actions">
+        <nav className="week-nav" aria-label="Changer de semaine">
+          <Link className="icon-btn" href={base({ semaine: addDays(week, -7) })} aria-label="Semaine précédente"><IconBack size={18} /></Link>
+          <span>
+            {rangeFmt.format(new Date(week + 'T12:00:00Z'))} – {rangeFmt.format(new Date(addDays(week, 6) + 'T12:00:00Z'))}
+          </span>
+          <Link className="icon-btn" href={base({ semaine: addDays(week, 7) })} aria-label="Semaine suivante"><IconChevronRight size={18} /></Link>
+          {week !== mondayOf(today) && <Link className="today-link" href="/pro/creneaux">Cette semaine</Link>}
+        </nav>
+        {active.length > 0 && panel !== 'new' && (
+          <Link className="btn btn-primary open-slots-btn" href={base({ date: week < today ? today : week })}>
+            <IconPlus size={18} /> Ouvrir des créneaux
+          </Link>
+        )}
+        </div>
       </header>
-      {v.status !== 'published' && <p className="notice notice-amber small">Ta fiche n’est pas encore en ligne : tes créneaux seront visibles dès sa validation.</p>}
+      {many && (
+        <ul className="offer-legend" aria-label="Prestations">
+          {active.map((o) => (
+            <li key={o.id} style={{ ['--oc' as string]: o.color }}>{o.name}</li>
+          ))}
+        </ul>
+      )}
 
-      <nav className="days" aria-label="Choisir le jour">
-        {days.map((d) => {
-          const c = dayChip(d, today);
-          return (
-            <Link key={d} className="day" href={d === today ? '/pro/creneaux' : `/pro/creneaux?date=${d}`} aria-current={d === date ? 'true' : undefined}>
-              <span>{c.top}</span>
-              <b>{c.num}</b>
-            </Link>
-          );
-        })}
-      </nav>
+      {venue.status !== 'published' && <p className="notice notice-amber">Ta fiche n’est pas encore en ligne : tes créneaux seront visibles dès sa validation.</p>}
 
-      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 380px), 1fr))', alignItems: 'start' }}>
-        <section className="stack" aria-label="Créneaux du jour" style={{ ['--gap' as string]: '8px' }}>
-          {rows.length === 0 && <p className="card muted small">Aucun créneau ce jour-là. Ouvre-en un avec le formulaire.</p>}
-          {rows.map((r) => {
-            const start = new Date(r.starts_at);
-            const past = start.getTime() < Date.now();
-            const pct = r.capacity ? Math.min(100, Math.round((r.used / r.capacity) * 100)) : 0;
-            const full = r.used >= r.capacity;
+      <div className={`slots-layout${panel ? ' has-panel' : ''}`}>
+        <section className="week-grid" aria-label="Planning de la semaine">
+          {weekDays.map((d) => {
+            const daySlots = list.filter((r) => r.day === d);
+            const past = d < today;
             return (
-              <div key={r.id} className="card stack" style={{ padding: '12px 14px', ['--gap' as string]: '8px', opacity: r.is_open && !past ? 1 : 0.55 }}>
-                <div className="row">
-                  <b style={{ fontSize: 16, width: 50 }}>{timeLabel(start)}</b>
-                  <Deal pct={r.discount_pct} small />
-                  {!r.is_open && <span className="pill pill-muted">fermé</span>}
-                  {past && <span className="pill pill-muted">passé</span>}
-                  <span className="grow" />
-                  {!past && (
-                    <form action={toggleSlotAction}>
-                      <input type="hidden" name="slotId" value={r.id} />
-                      <button className="btn btn-sm">{r.is_open ? 'Fermer' : 'Rouvrir'}</button>
-                    </form>
-                  )}
-                  {!past && r.n === 0 && (
-                    <form action={deleteSlotAction}>
-                      <input type="hidden" name="slotId" value={r.id} />
-                      <button className="btn btn-sm btn-danger" aria-label={`Supprimer le créneau de ${timeLabel(start)}`}>Supprimer</button>
-                    </form>
-                  )}
+              <div key={d} className={`week-col${d === today ? ' today' : ''}${past ? ' past' : ''}`}>
+                <div className="week-head">
+                  <b>{capitalize(dayHead.format(new Date(d + 'T12:00:00Z')).replace('.', ''))}</b>
+                  {daySlots.length > 0 && <span>{daySlots.length}</span>}
                 </div>
-                <div className="row">
-                  <div aria-hidden="true" className="grow" style={{ height: 6, borderRadius: 3, background: 'var(--line-2)', overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: full ? '#1E9E6A' : 'var(--primary)' }} />
-                  </div>
-                  <span className="small tnum" style={{ fontWeight: 700, color: full ? 'var(--ok)' : 'var(--ink-2)', minWidth: 74, textAlign: 'right' }}>
-                    {r.used}/{r.capacity} {full ? 'plein' : unit}
-                  </span>
-                </div>
+                {daySlots.map((r) => {
+                  const o = offerById.get(r.offer_id);
+                  const gone = r.startsAt.getTime() < now;
+                  const full = r.used >= r.capacity;
+                  return (
+                    <Link
+                      key={r.id}
+                      href={base({ creneau: r.id })}
+                      className={`slot-card${r.is_open ? '' : ' closed'}${gone ? ' gone' : ''}${editing?.id === r.id ? ' editing' : ''}${many ? ' tagged' : ''}`}
+                      aria-current={editing?.id === r.id ? 'true' : undefined}
+                      style={many && o ? { ['--oc' as string]: o.color } : undefined}
+                      title={o ? `${o.name}, ${timeLabel(r.startsAt)}` : undefined}
+                    >
+                      <span className="slot-top">
+                        <b className="num">{timeLabel(r.startsAt)}</b>
+                        <span className="slot-pct">−{r.discount_pct} %</span>
+                      </span>
+                      {many && o && <span className="slot-offer">{o.name}</span>}
+                      {o && <span className="slot-price">{euros(discounted(o.priceCents, r.discount_pct))}</span>}
+                      <span className="slot-fill" title={`${r.used} / ${r.capacity}`}>
+                        <i style={{ width: `${Math.min(100, (r.used / r.capacity) * 100)}%` }} />
+                      </span>
+                      <span className="slot-meta">{!r.is_open ? 'fermé' : full ? 'complet' : `${r.used}/${r.capacity} ${o?.capacityUnit === 'groupes' ? 'salles' : 'places'}`}</span>
+                    </Link>
+                  );
+                })}
+                {!past && (
+                  <Link className="slot-add" href={base({ date: d })} aria-label={`Ajouter un créneau le ${longDate(d)}`}>
+                    <IconPlus size={16} /> Ajouter
+                  </Link>
+                )}
               </div>
             );
           })}
         </section>
-        <SlotForm venueId={v.id} date={date} capacity={v.capacity} discount={v.baseDiscountPct} unit={v.capacityUnit} />
+
+        {panel && (
+        <aside className="slots-side">
+          {panel === 'edit' && editing && offerById.get(editing.offer_id) ? (
+            <EditSlotForm
+              key={editing.id}
+              back={base({})}
+              slot={{
+                id: editing.id,
+                dayLabel: `${capitalize(longDate(editing.day))} à ${timeLabel(editing.startsAt)}`,
+                time: timeLabel(editing.startsAt),
+                discountPct: editing.discount_pct,
+                capacity: editing.capacity,
+                used: editing.used,
+                bookings: editing.nbook,
+                isOpen: editing.is_open,
+                past: editing.startsAt.getTime() < now,
+                offer: offerById.get(editing.offer_id)!,
+              }}
+            />
+          ) : (
+            <NewSlotForm
+              key={sp.date ?? week}
+              venueId={venue.id}
+              offers={active}
+              defaultDate={isDateStr(sp.date) && sp.date >= today ? sp.date : week < today ? today : week}
+              defaultPct={venue.baseDiscountPct}
+              today={today}
+              back={base({})}
+            />
+          )}
+        </aside>
+        )}
       </div>
     </>
   );

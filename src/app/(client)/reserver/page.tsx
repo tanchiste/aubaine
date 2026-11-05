@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { slots, venues } from '@/db/schema';
+import { offers, slots, venues } from '@/db/schema';
 import { Deal, VenueArt } from '@/components/ui';
 import { IconBack } from '@/components/icons';
 import { euros, longDate, brusselsDate, timeLabel } from '@/lib/format';
@@ -17,11 +17,16 @@ export const metadata = { title: 'Ta réservation' };
 export default async function BookingPage({ searchParams }: { searchParams: Promise<{ slot?: string; n?: string }> }) {
   const sp = await searchParams;
   if (!sp.slot || !/^[0-9a-f-]{36}$/i.test(sp.slot)) notFound();
-  const [row] = await db.select({ slot: slots, venue: venues }).from(slots).innerJoin(venues, eq(venues.id, slots.venueId)).where(eq(slots.id, sp.slot));
+  const [row] = await db
+    .select({ slot: slots, venue: venues, offer: offers })
+    .from(slots)
+    .innerJoin(venues, eq(venues.id, slots.venueId))
+    .innerJoin(offers, eq(offers.id, slots.offerId))
+    .where(eq(slots.id, sp.slot));
   if (!row || row.venue.status !== 'published' || row.slot.startsAt < new Date()) notFound();
-  const { slot, venue } = row;
-  const n = Math.min(venue.groupMax, Math.max(venue.groupMin, parseInt(sp.n ?? '', 10) || 2));
-  const price = quote(venue, n, slot.discountPct);
+  const { slot, venue, offer } = row;
+  const n = Math.min(offer.groupMax, Math.max(offer.groupMin, parseInt(sp.n ?? '', 10) || 2));
+  const price = quote(offer, n, slot.discountPct);
   const photo = (await firstPhotos([venue.id])).get(venue.id);
   const day = brusselsDate(slot.startsAt);
   const user = await getCurrentUser();
@@ -36,7 +41,7 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
         <VenueArt className="swatch" color={venue.color} photoId={photo} style={{ width: 52, height: 52, borderRadius: 12 }} />
         <span className="grow">
           <b>{venue.name}</b>
-          <span className="small muted" style={{ display: 'block' }}>{day === brusselsDate() ? 'Aujourd’hui' : longDate(day)} · {timeLabel(slot.startsAt)} · {venue.durationMin} min</span>
+          <span className="small muted" style={{ display: 'block' }}>{day === brusselsDate() ? 'Aujourd’hui' : longDate(day)} · {timeLabel(slot.startsAt)} · {offer.name}, {offer.durationMin} min</span>
         </span>
         <Deal pct={slot.discountPct} />
       </div>

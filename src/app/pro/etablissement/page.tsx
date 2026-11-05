@@ -4,10 +4,11 @@ import { Checklist } from '@/components/Checklist';
 import { StatusPill } from '@/components/ui';
 import { IconEye } from '@/components/icons';
 import { requireOwnerContext } from '@/lib/pro';
-import { checklist, isReady, photoList } from '@/lib/venues';
+import { checklist, isReady, offersOf, photoList } from '@/lib/venues';
 import { PhotoManager } from './PhotoManager';
 import { SubmitBox } from './SubmitBox';
 import { VenueForm } from './VenueForm';
+import { OffersEditor } from './OffersEditor';
 
 export const metadata = { title: 'Mon établissement' };
 
@@ -16,7 +17,8 @@ export default async function VenueSettingsPage({ searchParams }: { searchParams
   if (!current) redirect('/pro');
   const v = current.venue;
   const photos = await photoList(v.id);
-  const items = checklist(v, photos.length);
+  const offerList = (await offersOf([v.id])).get(v.id) ?? [];
+  const items = checklist(v, photos.length, offerList);
   const locked = v.status === 'rejected';
   const canSubmit = v.status === 'draft' || v.status === 'changes_requested';
   const sp = await searchParams;
@@ -55,6 +57,11 @@ export default async function VenueSettingsPage({ searchParams }: { searchParams
           }}
         />
         <div className="stack" style={{ ['--gap' as string]: '14px' }}>
+          <OffersEditor
+            venueId={v.id}
+            locked={locked}
+            offers={offerList.map((o) => ({ id: o.id, name: o.name, description: o.description, durationMin: o.durationMin, groupMin: o.groupMin, groupMax: o.groupMax, capacity: o.capacity, capacityUnit: o.capacityUnit, priceCents: o.priceCents, priceUnit: o.priceUnit, isActive: o.isActive }))}
+          />
           <PhotoManager venueId={v.id} photos={photos} locked={locked} />
           {canSubmit && (
             <SubmitBox venueId={v.id} ready={isReady(items)}>

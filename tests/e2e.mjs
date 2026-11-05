@@ -141,10 +141,20 @@ try {
   await signup(partner, { kind: 'exploitant', firstName: 'Sophie', email: partnerEmail, venue: { name: venueName, category: 'escape' } });
   ok(/\/pro\/etablissement/.test(partner.url()), 'Inscription exploitant : arrive directement sur sa fiche');
   ok(await partner.locator('text=Fiche créée').isVisible(), 'Fiche créée en brouillon avec l’inscription');
+  // Prestations : la première est ouverte d'office pour indiquer son prix, puis on en ajoute une seconde
+  await partner.fill('.offer-form input[name=name]', 'Salle La Prison');
+  await partner.fill('.offer-form input[name=price]', '25');
+  await partner.click('.offer-form button:has-text("Enregistrer")');
+  await partner.waitForSelector('.offer-list li:has-text("25 € par pers.")');
+  await partner.click('button:has-text("+ Ajouter une prestation")');
+  await partner.fill('.offer-form input[name=name]', 'Salle Le Labo');
+  await partner.fill('.offer-form input[name=price]', '28');
+  await partner.click('.offer-form button:has-text("Ajouter la prestation")');
+  await partner.waitForSelector('.offer-list li:has-text("Salle Le Labo")');
+  ok((await partner.locator('.offer-list > li').count()) === 2, 'Deux prestations, chacune avec son prix');
   await partner.fill('textarea[name=description]', 'Deux salles immersives de 60 minutes au cœur de Mons, de 2 à 6 joueurs, idéal entre amis.');
   await partner.fill('input[name=address]', 'Rue de la Chaussée 1, 7000 Mons');
-  await partner.fill('input[name=price]', '25');
-  await partner.click('button:has-text("Enregistrer")');
+  await partner.click('form:has(textarea[name=description]) button:has-text("Enregistrer")');
   await partner.waitForSelector('text=Fiche enregistrée.');
   ok(true, 'Fiche enregistrée');
 
@@ -191,19 +201,43 @@ try {
   );
   const slotDate = `${parts.year}-${parts.month}-${parts.day}`;
   const slotTime = `${parts.hour}:${String(Math.floor(Number(parts.minute) / 5) * 5).padStart(2, '0')}`;
+  await partner.goto(`${BASE}/pro/creneaux`);
+  ok((await partner.locator('.week-grid .week-col').count()) === 7, 'Planning : la semaine entière en un coup d’œil');
   await partner.goto(`${BASE}/pro/creneaux?date=${slotDate}`);
+  ok((await partner.locator('.offer-choice button').count()) === 2, 'Ouvrir un créneau : on choisit la prestation');
   await partner.fill('input[name=date]', slotDate);
   await partner.fill('input[name=time]', slotTime);
+  await partner.click('.discount-chips button:has-text("−40 %")');
+  ok((await partner.locator('.price-preview b').textContent()).trim() === '15 €', 'Le prix client s’affiche avec la remise (25 € → 15 €)');
   await partner.click('form button:has-text("Ouvrir")');
   await partner.waitForSelector('text=1 créneau ouvert');
   ok(true, `Créneau ouvert le ${slotDate} à ${slotTime}`);
+  // Le même horaire chaque semaine, sur la seconde prestation
+  const nextDay = new Date(Date.parse(slotDate + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10);
+  await partner.click('.offer-choice button:has-text("Le Labo")');
+  await partner.fill('input[name=date]', nextDay);
+  await partner.fill('input[name=time]', '15:00');
+  await partner.check('text=Répéter chaque semaine');
+  await partner.selectOption('select[name=weeks]', '2');
+  await partner.click('form button:has-text("Ouvrir")');
+  await partner.waitForSelector('text=2 créneaux ouverts');
+  ok(true, 'Répéter sur 2 semaines ouvre 2 créneaux');
+  // Modifier un créneau depuis le planning
+  await partner.goto(`${BASE}/pro/creneaux?date=${slotDate}`);
+  await partner.click(`.slot-card:has-text("${slotTime}"):has-text("La Prison")`);
+  await partner.waitForURL(/creneau=/);
+  await partner.click('.slot-editor .discount-chips button:has-text("−50 %")');
+  await partner.click('.slot-editor button:has-text("Enregistrer")');
+  await partner.waitForSelector('text=Créneau mis à jour.');
   await partner.reload();
+  ok(await partner.locator(`.slot-card:has-text("${slotTime}"):has-text("La Prison") .slot-pct:has-text("−50 %")`).isVisible(), 'Créneau modifié : la remise passe à −50 %');
   await shot(partner, '06-pro-creneaux');
 
   // 6. Un nouveau client réserve (connexion au milieu du parcours)
   const cctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const buyer = await cctx.newPage();
   await buyer.goto(`${BASE}/lieu/${slug}?date=${slotDate}&n=4`);
+  ok((await buyer.locator('.offer-tabs a').count()) === 2, 'La fiche client propose les deux prestations');
   await buyer.locator('.slot:not(.full)').first().click();
   await buyer.click('.sticky-cta a:has-text("Réserver")');
   await buyer.waitForURL(/\/reserver/);

@@ -8,7 +8,7 @@ import { IconEye } from '@/components/icons';
 import { brusselsDate, euros, longDate, capitalize, timeLabel } from '@/lib/format';
 import { COMMISSION_PCT } from '@/lib/pricing';
 import { getProContext } from '@/lib/pro';
-import { checklist, isReady } from '@/lib/venues';
+import { checklist, isReady, offersOf } from '@/lib/venues';
 import { togglePauseAction } from './actions';
 import { CreateVenueForm } from './CreateVenueForm';
 import { CheckInBox } from './CheckInBox';
@@ -62,7 +62,7 @@ export default async function ProHome() {
   ]);
   const stats = isOwner ? await venueStats(v.id, COMMISSION_PCT) : null;
   const expected = todays.filter((b) => b.status !== 'no_show');
-  const items = checklist(v, photos);
+  const items = checklist(v, photos, (await offersOf([v.id])).get(v.id) ?? []);
   const ready = isReady(items);
   const people = expected.reduce((s, b) => s + b.people, 0);
   const now = Date.now();
@@ -145,7 +145,7 @@ export default async function ProHome() {
             <div><span>Absences</span><b>{stats.noShowPct} %</b><small>des réservations</small></div>
           </div>
           <p className="small" style={{ color: 'var(--ink-2)' }}>
-            7 prochains jours : <b>{stats.upcomingFree} {v.capacityUnit === 'places' ? 'places' : 'salles'} encore libres</b> sur {stats.upcomingSlots} créneau{stats.upcomingSlots > 1 ? 'x' : ''} ouvert{stats.upcomingSlots > 1 ? 's' : ''}.{' '}
+            7 prochains jours : <b>{stats.upcomingFree} place{stats.upcomingFree > 1 ? 's' : ''} encore libre{stats.upcomingFree > 1 ? 's' : ''}</b> sur {stats.upcomingSlots} créneau{stats.upcomingSlots > 1 ? 'x' : ''} ouvert{stats.upcomingSlots > 1 ? 's' : ''}.{' '}
             <Link href="/pro/creneaux">Gérer mes créneaux</Link>
           </p>
         </section>

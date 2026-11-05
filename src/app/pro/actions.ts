@@ -5,13 +5,13 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
-import { venueEvents, venueMembers, venuePhotos, venues, type VenueCategory } from '@/db/schema';
+import { bookings, offers, slots, venueEvents, venueMembers, venuePhotos, venues, type VenueCategory } from '@/db/schema';
 import { adminEmails, getMyVenues, requireUser } from '@/lib/auth';
 import { CATEGORY_KEYS, VENUE_COLORS } from '@/lib/categories';
 import { sendMail } from '@/lib/email';
 import { MAX_DISCOUNT, MIN_DISCOUNT } from '@/lib/pricing';
 import { VENUE_COOKIE, createDraftVenue } from '@/lib/pro';
-import { checklist, isReady } from '@/lib/venues';
+import { checklist, isReady, offersOf } from '@/lib/venues';
 
 const MAX_PHOTOS = 8;
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
@@ -84,25 +84,16 @@ const euros = z
 const int = (min: number, max: number, label: string) =>
   z.coerce.number({ message: `${label} invalide.` }).int(`${label} invalide.`).min(min, `${label} : minimum ${min}.`).max(max, `${label} : maximum ${max}.`);
 
-const venueSchema = z
-  .object({
-    name: z.string().trim().min(2, 'Le nom est trop court.').max(60),
-    category: z.enum(CATEGORY_KEYS as [VenueCategory, ...VenueCategory[]]),
-    city: z.string().trim().min(2, 'Indique la commune.').max(40),
-    area: z.string().trim().max(40).optional().transform((s) => s || null),
-    address: z.string().trim().max(120).optional().transform((s) => s || null),
-    description: z.string().trim().max(800, 'Description trop longue (800 caractères maximum).').optional().transform((s) => s || null),
-    durationMin: int(5, 480, 'Durée'),
-    groupMin: int(1, 50, 'Groupe minimum'),
-    groupMax: int(1, 100, 'Groupe maximum'),
-    capacity: int(1, 200, 'Capacité'),
-    capacityUnit: z.enum(['places', 'groupes']),
-    price: euros,
-    priceUnit: z.enum(['person', 'session']),
-    baseDiscountPct: int(MIN_DISCOUNT, MAX_DISCOUNT, 'Remise'),
-    color: z.string().refine((c) => VENUE_COLORS.includes(c), 'Couleur invalide.'),
-  })
-  .refine((d) => d.groupMin <= d.groupMax, { message: 'Le groupe minimum dépasse le maximum.' });
+const venueSchema = z.object({
+  name: z.string().trim().min(2, 'Le nom est trop court.').max(60),
+  category: z.enum(CATEGORY_KEYS as [VenueCategory, ...VenueCategory[]]),
+  city: z.string().trim().min(2, 'Indique la commune.').max(40),
+  area: z.string().trim().max(40).optional().transform((s) => s || null),
+  address: z.string().trim().max(120).optional().transform((s) => s || null),
+  description: z.string().trim().max(800, 'Description trop longue (800 caractères maximum).').optional().transform((s) => s || null),
+  baseDiscountPct: int(MIN_DISCOUNT, MAX_DISCOUNT, 'Remise'),
+  color: z.string().refine((c) => VENUE_COLORS.includes(c), 'Couleur invalide.'),
+});
 
 export async function saveVenueAction(_prev: FormState, form: FormData): Promise<FormState> {
   try {
@@ -110,10 +101,9 @@ export async function saveVenueAction(_prev: FormState, form: FormData): Promise
     if (venue.status === 'rejected') return { error: 'Cette fiche a été refusée : contacte-nous pour en discuter.' };
     const parsed = venueSchema.safeParse(Object.fromEntries(form));
     if (!parsed.success) return { error: parsed.error.issues[0].message };
-    const { price, ...data } = parsed.data;
     await db
       .update(venues)
-      .set({ ...data, priceCents: price, updatedAt: new Date() })
+      .set({ ...parsed.data, updatedAt: new Date() })
       .where(eq(venues.id, venue.id));
     revalidatePath('/pro', 'layout');
     return { ok: true, message: 'Fiche enregistrée.' };
@@ -196,7 +186,8 @@ async function doSubmit(venueId: string) {
     const { user, venue } = await ownVenue(venueId);
     if (!['draft', 'changes_requested'].includes(venue.status)) throw new Error('Cette fiche ne peut pas être envoyée maintenant.');
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(venuePhotos).where(eq(venuePhotos.venueId, venue.id));
-    if (!isReady(checklist(venue, n))) throw new Error('Il manque encore des éléments : regarde la liste ci-dessus.');
+    const offerList = (await offersOf([venue.id])).get(venue.id) ?? [];
+    if (!isReady(checklist(venue, n, offerList))) throw new Error('Il manque encore des éléments : regarde la liste ci-dessus.');
     await db
       .update(venues)
       .set({ status: 'submitted', submittedAt: new Date(), reviewMessage: null, updatedAt: new Date() })
@@ -221,4 +212,65 @@ export async function togglePauseAction(form: FormData) {
   await db.insert(venueEvents).values({ venueId: venue.id, actorId: user.id, action: next === 'paused' ? 'paused' : 'resumed' });
   revalidatePath('/pro', 'layout');
   revalidatePath('/');
+}
+
+/* ---------- Prestations ---------- */
+
+const offerSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Donne un nom à la prestation (ex. « Session 15 min »).').max(50),
+    description: z.string().trim().max(200).optional().transform((s) => s || null),
+    durationMin: int(5, 480, 'Durée'),
+    groupMin: int(1, 50, 'Groupe minimum'),
+    groupMax: int(1, 100, 'Groupe maximum'),
+    capacity: int(1, 200, 'Capacité'),
+    capacityUnit: z.enum(['places', 'groupes']),
+    price: euros,
+    priceUnit: z.enum(['person', 'session']),
+  })
+  .refine((d) => d.groupMin <= d.groupMax, { message: 'Le groupe minimum dépasse le maximum.' });
+
+export async function saveOfferAction(_prev: FormState, form: FormData): Promise<FormState> {
+  try {
+    const { venue } = await ownVenue(String(form.get('venueId')));
+    const parsed = offerSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+    const { price, ...data } = parsed.data;
+    const id = String(form.get('offerId') ?? '');
+    if (id) {
+      if (!z.uuid().safeParse(id).success) return { error: 'Prestation introuvable.' };
+      await db.update(offers).set({ ...data, priceCents: price }).where(and(eq(offers.id, id), eq(offers.venueId, venue.id)));
+    } else {
+      const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(offers).where(eq(offers.venueId, venue.id));
+      if (n >= 12) return { error: '12 prestations maximum.' };
+      await db.insert(offers).values({ ...data, priceCents: price, venueId: venue.id, position: n });
+    }
+    revalidatePath('/pro', 'layout');
+    return { ok: true, message: id ? 'Prestation enregistrée.' : 'Prestation ajoutée.' };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Erreur inattendue.' };
+  }
+}
+
+/** Retire une prestation : supprimée si elle n'a jamais été réservée, sinon simplement masquée */
+export async function removeOfferAction(form: FormData) {
+  const { venue } = await ownVenue(String(form.get('venueId')));
+  const id = String(form.get('offerId'));
+  if (!z.uuid().safeParse(id).success) return;
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(bookings)
+    .innerJoin(slots, eq(slots.id, bookings.slotId))
+    .where(eq(slots.offerId, id));
+  if (n > 0) await db.update(offers).set({ isActive: false }).where(and(eq(offers.id, id), eq(offers.venueId, venue.id)));
+  else await db.delete(offers).where(and(eq(offers.id, id), eq(offers.venueId, venue.id)));
+  revalidatePath('/pro', 'layout');
+}
+
+export async function toggleOfferAction(form: FormData) {
+  const { venue } = await ownVenue(String(form.get('venueId')));
+  const id = String(form.get('offerId'));
+  if (!z.uuid().safeParse(id).success) return;
+  await db.update(offers).set({ isActive: sql`not ${offers.isActive}` }).where(and(eq(offers.id, id), eq(offers.venueId, venue.id)));
+  revalidatePath('/pro', 'layout');
 }

@@ -13,7 +13,7 @@ export const metadata = { title: 'Billet' };
 export default async function TicketPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nouveau?: string }> }) {
   const row = await getBooking((await params).id);
   if (!row) notFound();
-  const { booking, slot, venue, user: owner } = row;
+  const { booking, slot, venue, offer, user: owner } = row;
   const me = await getCurrentUser();
   const isOwner = me?.id === owner.id;
   const isNew = (await searchParams).nouveau === '1' && isOwner;
@@ -47,7 +47,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
         <dl className="grid-3" style={{ margin: 0, padding: '14px 16px 12px', gap: 6 }}>
           {[
             ['QUAND', `${day === brusselsDate() ? 'Auj.' : longDate(day).split(' ').slice(1).join(' ')} ${timeLabel(slot.startsAt)}`],
-            ['DURÉE', `${venue.durationMin} min`],
+            ['DURÉE', `${offer.durationMin} min`],
             ['GROUPE', `${booking.people} pers.`],
           ].map(([k, v]) => (
             <div key={k}>

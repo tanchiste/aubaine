@@ -620,3 +620,100 @@ p { margin: 0; }
 @media (max-width: 699px) { .lbl-long { display: none; } .lbl-short { display: inline; } }
 
 .toolbar .qmenu-people { left: 0; right: auto; }
+
+/* ---------- Prestations ---------- */
+.offer-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.offer-list > li { padding: 12px 0; border-top: 1px solid var(--line-2); }
+.offer-list > li:first-child { border-top: 0; padding-top: 4px; }
+.offer-list > li.off { opacity: 0.6; }
+.offer-list b { font-size: 15px; }
+.offer-form { background: var(--soft); border-radius: 14px; padding: 14px; }
+.offer-form .input, .offer-form .select { background: #fff; }
+.offer-tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; margin: -2px; }
+.offer-tabs::-webkit-scrollbar { display: none; }
+.offer-tabs a { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); text-decoration: none; }
+.offer-tabs a:hover { color: var(--ink); border-color: #C9C5DA; }
+.offer-tabs a[aria-current='true'] { border-color: var(--night); box-shadow: inset 0 0 0 1px var(--night); }
+.offer-tabs b { font-size: 14px; }
+.offer-tabs span { font-size: 12px; color: var(--muted); }
+
+/* ---------- Planning des créneaux (exploitant) ---------- */
+.week-nav { display: flex; align-items: center; gap: 4px; background: var(--card); border-radius: 999px; padding: 4px; }
+.week-nav .icon-btn { width: 36px; height: 36px; background: var(--soft); }
+.week-nav > span { font-size: 14px; font-weight: 700; padding: 0 6px; white-space: nowrap; }
+.week-nav .today-link { font-size: 13px; font-weight: 700; padding: 0 10px; text-decoration: none; }
+.slots-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; width: 100%; }
+.slots-actions .open-slots-btn { flex: 1 1 100%; }
+.offer-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.offer-legend li { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.offer-legend li::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--oc); }
+.slots-layout { display: flex; flex-direction: column; gap: 16px; }
+.slots-side { order: -1; }
+.week-grid { display: flex; flex-direction: column; gap: 8px; }
+.week-col { background: var(--card); border-radius: 16px; padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.week-col.past { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); }
+.week-col.today { box-shadow: inset 0 0 0 2px var(--primary); }
+.week-head { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px; }
+.week-head b { font-size: 14px; }
+.week-col.today .week-head b { color: var(--primary); }
+.week-head span { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--soft); color: var(--ink-2); font-size: 12px; font-weight: 700; display: inline-grid; place-items: center; }
+.slot-card { container-type: inline-size; display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 8px 10px; border-radius: 12px; background: var(--soft); border: 1.5px solid var(--line-2); color: var(--ink); text-decoration: none; }
+.slot-card:hover { color: var(--ink); border-color: #C9C5DA; }
+.slot-card.editing { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px var(--primary-soft); }
+.slot-card.closed { background: transparent; border-style: dashed; }
+.slot-card.closed .slot-pct, .slot-card.closed .num { color: var(--muted); }
+.slot-card.gone { opacity: 0.5; }
+.slot-card .num { font-size: 15px; }
+.slot-card.tagged { border-left: 4px solid var(--oc); }
+.slot-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 6px; }
+/* Cartes étroites : la couleur suffit à reconnaître la prestation, puis on garde l'heure et la remise */
+@container (max-width: 100px) { .slot-offer { display: none; } }
+@container (max-width: 70px) {
+  .slot-top { flex-direction: column; align-items: flex-start; }
+  .slot-price { display: none; }
+}
+.slot-pct { font-family: var(--display); font-size: 12px; font-weight: 600; color: var(--deal-ink); white-space: nowrap; }
+.slot-offer { font-size: 12px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot-price { font-size: 12px; color: var(--muted); }
+.slot-fill { display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 2px; }
+.slot-fill i { display: block; height: 100%; background: var(--ok); border-radius: 2px; }
+.slot-meta { font-size: 11px; font-weight: 600; color: var(--muted); }
+.slot-add { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 44px; border: 1.5px dashed var(--line); border-radius: 12px; color: var(--primary); font-size: 13px; font-weight: 700; text-decoration: none; }
+.slot-add:hover { border-color: var(--primary); background: var(--primary-soft); }
+.discount-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.discount-chips button { height: 38px; padding: 0 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); font-family: var(--display); font-size: 13px; font-weight: 600; cursor: pointer; }
+.discount-chips button:hover { border-color: var(--deal); }
+.discount-chips button[aria-checked='true'] { background: var(--deal); border-color: var(--deal); color: #fff; }
+.price-preview { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; }
+.price-preview s { color: var(--muted); font-size: 14px; }
+.price-preview b { font-family: var(--display); font-size: 22px; font-weight: 600; color: var(--deal-ink); }
+.price-preview span { font-size: 13px; color: var(--muted); }
+.offer-choice { display: flex; flex-wrap: wrap; gap: 8px; }
+.offer-choice button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); cursor: pointer; text-align: left; }
+.offer-choice button[aria-checked='true'] { border-color: var(--night); box-shadow: inset 0 0 0 1px var(--night); }
+.offer-choice b { font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.offer-choice b::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--oc, var(--line)); }
+.offer-choice span { font-size: 12px; color: var(--muted); }
+.repeat-box { padding: 12px; border-radius: 12px; background: var(--soft); }
+.dow-toggles { display: flex; gap: 6px; }
+.dow-toggles label { position: relative; flex: 1; max-width: 42px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 1.5px solid var(--line); font-size: 13px; font-weight: 700; cursor: pointer; }
+.dow-toggles label.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.dow-toggles input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.dow-toggles label:has(input:focus-visible) { outline: 3px solid #A99DFF; }
+.offer-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.offer-list > li { padding: 12px; border-radius: 14px; background: var(--soft); }
+.offer-list > li.off { opacity: 0.6; }
+.offer-list b { font-size: 15px; }
+@media (min-width: 900px) {
+  .slots-actions { width: auto; }
+  .slots-actions .open-slots-btn { flex: none; }
+}
+@media (min-width: 1200px) {
+  .pro-content:has(.slots-layout) { max-width: 1400px; }
+  .slots-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  .slots-layout.has-panel { grid-template-columns: minmax(0, 1fr) 350px; }
+  .slots-side { order: 0; position: sticky; top: 20px; }
+  .week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+  .week-col { display: flex; flex-direction: column; gap: 6px; padding: 8px; min-height: 200px; }
+  .week-head { padding: 2px 2px 4px; }
+}

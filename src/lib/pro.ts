@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { users, venueEvents, venueMembers, venues, type VenueCategory } from '@/db/schema';
+import { offers, users, venueEvents, venueMembers, venues, type VenueCategory } from '@/db/schema';
 import { getMyVenues, requireUser } from './auth';
 import { VENUE_COLORS } from './categories';
 
@@ -65,8 +65,22 @@ export async function createDraftVenue(userId: string, v: { name: string; catego
     .insert(venues)
     .values({ slug, name: v.name, category: v.category, city: v.city, color, ...DEFAULTS[v.category], priceCents: 0, baseDiscountPct: 25 })
     .returning({ id: venues.id });
+  // Une première prestation, à compléter (prix) par l'exploitant.
+  await db.insert(offers).values({ venueId: row.id, name: DEFAULT_OFFER_NAME[v.category], ...DEFAULTS[v.category], priceCents: 0 });
   await db.insert(venueMembers).values({ venueId: row.id, userId, role: 'owner' });
   await db.insert(venueEvents).values({ venueId: row.id, actorId: userId, action: 'created' });
   await db.update(users).set({ kind: 'exploitant' }).where(eq(users.id, userId));
   return row.id;
 }
+
+/** Nom proposé pour la première prestation, selon l'activité */
+export const DEFAULT_OFFER_NAME: Record<VenueCategory, string> = {
+  escape: 'Escape game 60 min',
+  karting: 'Session 15 min',
+  laser: 'Partie 20 min',
+  vr: 'Session VR 30 min',
+  bowling: 'Partie de bowling',
+  hache: 'Session de lancer 1 h',
+  bienetre: 'Séance privative 2 h',
+  autre: 'Séance',
+};

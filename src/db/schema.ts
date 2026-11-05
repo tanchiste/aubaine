@@ -185,6 +185,33 @@ export const venueEvents = pgTable(
   (t) => [index('venue_events_venue_idx').on(t.venueId, t.createdAt)],
 );
 
+/**
+ * Prestations : ce que l'établissement vend (session de 15 min, Grand Prix, salle « La Prison »…).
+ * Chaque prestation a sa durée, son prix, sa taille de groupe et sa capacité ; les créneaux s'y rattachent.
+ */
+export const offers = pgTable(
+  'offers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    venueId: uuid('venue_id')
+      .notNull()
+      .references(() => venues.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    durationMin: integer('duration_min').notNull().default(60),
+    groupMin: integer('group_min').notNull().default(1),
+    groupMax: integer('group_max').notNull().default(6),
+    capacity: integer('capacity').notNull().default(1),
+    capacityUnit: capacityUnit('capacity_unit').notNull().default('groupes'),
+    priceCents: integer('price_cents').notNull().default(0),
+    priceUnit: priceUnit('price_unit').notNull().default('person'),
+    isActive: boolean('is_active').notNull().default(true),
+    position: integer('position').notNull().default(0),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('offers_venue_idx').on(t.venueId, t.position)],
+);
+
 /* ---------- Créneaux et réservations ---------- */
 
 export const slots = pgTable(
@@ -194,6 +221,9 @@ export const slots = pgTable(
     venueId: uuid('venue_id')
       .notNull()
       .references(() => venues.id, { onDelete: 'cascade' }),
+    offerId: uuid('offer_id')
+      .notNull()
+      .references(() => offers.id, { onDelete: 'cascade' }),
     startsAt: ts('starts_at').notNull(),
     /** dans l'unité de l'établissement (places ou groupes) */
     capacity: integer('capacity').notNull(),
@@ -201,7 +231,11 @@ export const slots = pgTable(
     isOpen: boolean('is_open').notNull().default(true),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('slots_venue_start_uniq').on(t.venueId, t.startsAt), index('slots_start_idx').on(t.startsAt)],
+  (t) => [
+    uniqueIndex('slots_offer_start_uniq').on(t.offerId, t.startsAt),
+    index('slots_venue_start_idx').on(t.venueId, t.startsAt),
+    index('slots_start_idx').on(t.startsAt),
+  ],
 );
 
 export const bookings = pgTable(
@@ -240,6 +274,7 @@ export type AccountKind = (typeof accountKind.enumValues)[number];
 export type MemberRole = (typeof memberRole.enumValues)[number];
 export type Venue = typeof venues.$inferSelect;
 export type Slot = typeof slots.$inferSelect;
+export type Offer = typeof offers.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type VenueStatus = (typeof venueStatus.enumValues)[number];
 export type VenueCategory = (typeof venueCategory.enumValues)[number];

@@ -1,21 +1,32 @@
 import 'server-only';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { venuePhotos, venues, type Venue, type VenueCategory } from '@/db/schema';
+import { offers, venuePhotos, venues, type Offer, type Venue, type VenueCategory } from '@/db/schema';
 import { MAX_DISCOUNT, MIN_DISCOUNT, discounted } from './pricing';
 import { addDays, brusselsHour } from './format';
 import type { HourRange, Sort } from './params';
 import { matchVenue } from './search';
 
-export type SlotView = { id: string; startsAt: Date; discountPct: number; capacity: number; remaining: number };
+/** Ce qu'un créneau vend : la prestation (nom, durée, prix, groupe, capacité) */
+export type OfferLite = Pick<Offer, 'id' | 'name' | 'durationMin' | 'groupMin' | 'groupMax' | 'capacityUnit' | 'priceCents' | 'priceUnit'>;
+export type SlotView = { id: string; startsAt: Date; discountPct: number; capacity: number; remaining: number; offer: OfferLite };
 
 /** Unités consommées par une réservation : une place par personne, ou une salle entière */
-export const unitsFor = (v: Pick<Venue, 'capacityUnit'>, people: number) => (v.capacityUnit === 'places' ? people : 1);
+export const unitsFor = (o: Pick<Offer, 'capacityUnit'>, people: number) => (o.capacityUnit === 'places' ? people : 1);
+
+/** Le groupe tient-il sur ce créneau (taille acceptée et assez de place) ? */
+export const fits = (s: SlotView, people: number) =>
+  people >= s.offer.groupMin && people <= s.offer.groupMax && s.remaining >= unitsFor(s.offer, people);
 
 const REMAINING = sql`s.capacity - coalesce((
-  select sum(case when v.capacity_unit = 'places' then b.people else 1 end)
+  select sum(case when o.capacity_unit = 'places' then b.people else 1 end)
   from bookings b where b.slot_id = s.id and b.status in ('confirmed', 'checked_in')
 ), 0)`;
+
+/** Colonnes communes : le créneau, sa prestation et les places restantes (alias s = slots, o = offers) */
+const SLOT_COLS = sql`s.id, s.venue_id, s.starts_at, s.discount_pct, s.capacity,
+  o.id as offer_id, o.name as offer_name, o.duration_min, o.group_min, o.group_max, o.capacity_unit, o.price_cents, o.price_unit,
+  ${REMAINING} as remaining`;
 
 const dayStart = (date: string) => sql`(${date}::date)::timestamp at time zone 'Europe/Brussels'`;
 const dayEnd = (date: string) => sql`(${date}::date + 1)::timestamp at time zone 'Europe/Brussels'`;
@@ -27,6 +38,14 @@ type SlotRow = {
   discount_pct: number;
   capacity: number;
   remaining: number;
+  offer_id: string;
+  offer_name: string;
+  duration_min: number;
+  group_min: number;
+  group_max: number;
+  capacity_unit: 'places' | 'groupes';
+  price_cents: number;
+  price_unit: 'person' | 'session';
 };
 
 function toSlot(r: SlotRow): SlotView {
@@ -36,6 +55,16 @@ function toSlot(r: SlotRow): SlotView {
     discountPct: r.discount_pct,
     capacity: r.capacity,
     remaining: Number(r.remaining),
+    offer: {
+      id: r.offer_id,
+      name: r.offer_name,
+      durationMin: r.duration_min,
+      groupMin: r.group_min,
+      groupMax: r.group_max,
+      capacityUnit: r.capacity_unit,
+      priceCents: r.price_cents,
+      priceUnit: r.price_unit,
+    },
   };
 }
 
@@ -43,10 +72,11 @@ function toSlot(r: SlotRow): SlotView {
 async function slotsForDay(date: string, venueIds?: string[]): Promise<SlotRow[]> {
   if (venueIds && venueIds.length === 0) return [];
   const rows = await db.execute<SlotRow>(sql`
-    select s.id, s.venue_id, s.starts_at, s.discount_pct, s.capacity, ${REMAINING} as remaining
+    select ${SLOT_COLS}
     from slots s
     join venues v on v.id = s.venue_id
-    where v.status = 'published' and s.is_open
+    join offers o on o.id = s.offer_id
+    where v.status = 'published' and s.is_open and o.is_active
       and s.starts_at > now()
       and s.starts_at >= ${dayStart(date)} and s.starts_at < ${dayEnd(date)}
       ${venueIds ? sql`and s.venue_id in (${sql.join(venueIds.map((id) => sql`${id}::uuid`), sql`, `)})` : sql``}
@@ -83,15 +113,15 @@ async function publishedVenues(f: Filters) {
   if (f.city) conds.push(sql`lower(${venues.city}) = lower(${f.city})`);
   const list = await db.select().from(venues).where(and(...conds));
   // Recherche en mémoire : sans accents, sur le nom, le type d'activité, la ville et la description.
-  return list.filter((v) => f.people >= v.groupMin && f.people <= v.groupMax && (!f.q || matchVenue(v, f.q)));
+  // La taille du groupe se vérifie créneau par créneau (chaque prestation a la sienne).
+  return list.filter((v) => !f.q || matchVenue(v, f.q));
 }
 
 /** Établissements en ligne qui correspondent à une recherche, avec leur prochain créneau et leur meilleure remise sur 7 jours */
 export async function searchVenues(q: string, opts: { people?: number; city?: string; limit?: number } = {}) {
   const list = (await db.select().from(venues).where(eq(venues.status, 'published')))
     .filter((v) => matchVenue(v, q))
-    .filter((v) => !opts.city || v.city.toLowerCase() === opts.city.toLowerCase())
-    .filter((v) => !opts.people || (opts.people >= v.groupMin && opts.people <= v.groupMax));
+    .filter((v) => !opts.city || v.city.toLowerCase() === opts.city.toLowerCase());
   if (list.length === 0) return [];
   const ids = list.map((v) => v.id);
   const [rows, photos] = await Promise.all([
@@ -113,7 +143,8 @@ export async function searchVenues(q: string, opts: { people?: number; city?: st
     .slice(0, opts.limit ?? 20);
 }
 
-const minPrice = (v: Venue, slots: SlotView[]) => Math.min(...slots.map((s) => discounted(v.priceCents, s.discountPct)));
+/** Prix le plus bas parmi des créneaux (par personne ou la séance, selon la prestation) */
+export const minPrice = (slots: SlotView[]) => Math.min(...slots.map((s) => discounted(s.offer.priceCents, s.discountPct)));
 
 export async function explorer(opts: Filters & { date: string; hours?: HourRange; sort?: Sort }) {
   const fit = await publishedVenues(opts);
@@ -128,14 +159,14 @@ export async function explorer(opts: Filters & { date: string; hours?: HourRange
 
   const byVenue = new Map<string, SlotView[]>();
   for (const r of rows) {
-    const v = fit.find((x) => x.id === r.venue_id)!;
-    if (Number(r.remaining) < unitsFor(v, opts.people)) continue;
+    const slot = toSlot(r);
+    if (!fits(slot, opts.people)) continue;
     if (range) {
       const h = brusselsHour(new Date(r.starts_at));
       if (h < range.from || h >= range.to) continue;
     }
     const arr = byVenue.get(r.venue_id) ?? [];
-    arr.push(toSlot(r));
+    arr.push(slot);
     byVenue.set(r.venue_id, arr);
   }
 
@@ -145,7 +176,7 @@ export async function explorer(opts: Filters & { date: string; hours?: HourRange
   const sort = opts.sort ?? 'remise';
   items.sort((a, b) => {
     if (sort === 'heure') return a.slots[0].startsAt.getTime() - b.slots[0].startsAt.getTime();
-    if (sort === 'prix') return minPrice(a.venue, a.slots) - minPrice(b.venue, b.slots);
+    if (sort === 'prix') return minPrice(a.slots) - minPrice(b.slots);
     return Math.max(...b.slots.map((s) => s.discountPct)) - Math.max(...a.slots.map((s) => s.discountPct));
   });
   return items;
@@ -158,10 +189,10 @@ export async function bestDeals(f: Filters & { today: string; hours?: HourRange;
   const fit = await publishedVenues(f);
   if (fit.length === 0) return [];
   const rows = await db.execute<SlotRow>(sql`
-    select s.id, s.venue_id, s.starts_at, s.discount_pct, s.capacity, ${REMAINING} as remaining
+    select ${SLOT_COLS}
     from slots s
-    join venues v on v.id = s.venue_id
-    where s.is_open and s.starts_at > now() + interval '30 minutes'
+    join offers o on o.id = s.offer_id
+    where s.is_open and o.is_active and s.starts_at > now() + interval '30 minutes'
       and s.starts_at < ${dayEnd(addDays(f.today, 6))}
       ${f.hours ? sql`and extract(hour from s.starts_at at time zone 'Europe/Brussels') >= ${f.hours.from}
         and extract(hour from s.starts_at at time zone 'Europe/Brussels') < ${f.hours.to}` : sql``}
@@ -175,8 +206,9 @@ export async function bestDeals(f: Filters & { today: string; hours?: HourRange;
   for (const r of rows) {
     if (out.some((d) => d.venue.id === r.venue_id)) continue;
     const v = fit.find((x) => x.id === r.venue_id)!;
-    if (Number(r.remaining) < unitsFor(v, f.people)) continue;
-    out.push({ venue: v, photoId: photos.get(v.id) ?? null, slot: toSlot(r) });
+    const slot = toSlot(r);
+    if (!fits(slot, f.people)) continue;
+    out.push({ venue: v, photoId: photos.get(v.id) ?? null, slot });
     if (out.length >= (f.limit ?? 8)) break;
   }
   return out;
@@ -205,7 +237,7 @@ export async function lastMinute(today: string, people: number, city?: string) {
   const out: { venue: Venue; photoId: string | null; slot: SlotView }[] = [];
   for (const r of rows) {
     const v = list.find((x) => x.id === r.venue_id)!;
-    if (people < v.groupMin || people > v.groupMax || Number(r.remaining) < unitsFor(v, people)) continue;
+    if (!fits(toSlot(r), people)) continue;
     if (city && v.city.toLowerCase() !== city.toLowerCase()) continue;
     if (out.some((o) => o.venue.id === v.id)) continue;
     out.push({ venue: v, photoId: photos.get(v.id) ?? null, slot: toSlot(r) });
@@ -228,23 +260,35 @@ export type CheckItem = { key: string; label: string; detail: string; state: 'ok
 
 export const MIN_PHOTOS = 3;
 
-export function checklist(v: Venue, photoCount: number): CheckItem[] {
+/** Prestations d'un ou plusieurs établissements, dans l'ordre choisi par l'exploitant */
+export async function offersOf(venueIds: string[]): Promise<Map<string, Offer[]>> {
+  const map = new Map<string, Offer[]>(venueIds.map((id) => [id, []]));
+  if (venueIds.length === 0) return map;
+  const rows = await db.select().from(offers).where(inArray(offers.venueId, venueIds)).orderBy(asc(offers.position), asc(offers.createdAt));
+  for (const o of rows) map.get(o.venueId)?.push(o);
+  return map;
+}
+
+export function checklist(v: Venue, photoCount: number, offerList: Offer[]): CheckItem[] {
   const missing: string[] = [];
   if (!v.description || v.description.trim().length < 40) missing.push('description (40 caractères minimum)');
   if (!v.address) missing.push('adresse');
-  if (v.priceCents <= 0) missing.push('prix');
-  if (v.durationMin <= 0) missing.push('durée');
-  if (v.groupMin > v.groupMax) missing.push('taille de groupe');
+  const ready = offerList.filter((o) => o.isActive && o.priceCents > 0 && o.durationMin > 0 && o.groupMin <= o.groupMax);
 
-  const unit = v.priceUnit === 'session' ? 'la séance' : 'par personne';
   return [
     {
       key: 'fiche',
       label: 'Fiche complète',
       state: missing.length ? 'ko' : 'ok',
-      detail: missing.length
-        ? `À compléter : ${missing.join(', ')}`
-        : `${v.durationMin} min, ${v.groupMin} à ${v.groupMax} pers., ${(v.priceCents / 100).toLocaleString('fr-BE')} € ${unit}`,
+      detail: missing.length ? `À compléter : ${missing.join(', ')}` : 'Description et adresse renseignées',
+    },
+    {
+      key: 'prestations',
+      label: ready.length ? `${ready.length} prestation${ready.length > 1 ? 's' : ''}` : 'Prestation',
+      state: ready.length ? 'ok' : 'ko',
+      detail: ready.length
+        ? ready.map((o) => `${o.name} (${(o.priceCents / 100).toLocaleString('fr-BE')} € ${o.priceUnit === 'session' ? 'la séance' : 'par pers.'})`).join(', ')
+        : 'Ajoute au moins une prestation avec son prix (ex. « Session 15 min, 22 € par pers. »)',
     },
     {
       key: 'photos',

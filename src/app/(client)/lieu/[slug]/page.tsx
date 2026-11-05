@@ -9,7 +9,7 @@ import { addDays, brusselsHour, dayChip, euros, longDate, timeLabel } from '@/li
 import { DAYS_AHEAD, MAX_DAYS, clientParams, withParams } from '@/lib/params';
 import { DatePicker } from '@/components/DatePicker';
 import { quote } from '@/lib/pricing';
-import { photoList, unitsFor, venueBySlug, venueSlotsForDay } from '@/lib/venues';
+import { offersOf, photoList, unitsFor, venueBySlug, venueSlotsForDay } from '@/lib/venues';
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -32,28 +32,46 @@ export default async function VenuePage({ params, searchParams }: Props) {
     if (!user || (!user.isAdmin && !mine.some((m) => m.venue.id === venue.id))) notFound();
   }
 
-  const n = Math.min(venue.groupMax, Math.max(venue.groupMin, p.n));
-  const [photos, firstSlots] = await Promise.all([photoList(venue.id), venueSlotsForDay(venue.id, p.date)]);
+  const [photos, firstSlots, offerMap] = await Promise.all([photoList(venue.id), venueSlotsForDay(venue.id, p.date), offersOf([venue.id])]);
+  const offerList = (offerMap.get(venue.id) ?? []).filter((o) => o.isActive);
   // Plus rien aujourd'hui (ou pas de date choisie) : on avance au prochain jour qui a des créneaux.
-  let slots = firstSlots;
-  if (slots.length === 0 && !raw.date) {
+  let daySlots = firstSlots;
+  if (daySlots.length === 0 && !raw.date) {
     for (let i = 1; i < 14; i++) {
       const next = await venueSlotsForDay(venue.id, addDays(p.today, i));
       if (next.length > 0) {
-        slots = next;
+        daySlots = next;
         p.date = addDays(p.today, i);
         break;
       }
     }
   }
-  const need = unitsFor(venue, n);
+  // Plusieurs prestations : on en montre une à la fois (celle demandée, celle du créneau choisi, ou la première qui a des créneaux).
+  const wanted = typeof raw.offre === 'string' ? raw.offre : undefined;
+  const fromSlot = daySlots.find((s) => s.id === p.slot)?.offer.id;
+  const offer =
+    offerList.find((o) => o.id === wanted) ??
+    offerList.find((o) => o.id === fromSlot) ??
+    offerList.find((o) => daySlots.some((s) => s.offer.id === o.id)) ??
+    offerList[0] ??
+    null;
+  const slots = offer ? daySlots.filter((s) => s.offer.id === offer.id) : daySlots;
+  const n = offer ? Math.min(offer.groupMax, Math.max(offer.groupMin, p.n)) : p.n;
+  const need = offer ? unitsFor(offer, n) : 1;
   const selected = slots.find((s) => s.id === p.slot && s.remaining >= need) ?? null;
-  const base = { date: p.date !== p.today ? p.date : undefined, n: n !== 2 ? n : undefined, moment: p.moment, de: p.de, a: p.a };
+  const base = {
+    date: p.date !== p.today ? p.date : undefined,
+    n: n !== 2 ? n : undefined,
+    moment: p.moment,
+    de: p.de,
+    a: p.a,
+    offre: offerList.length > 1 && offer ? offer.id : undefined,
+  };
   // Venu d'Explorer avec « Matin », « Après-midi » ou « Soir » : on garde le même moment ici.
   const range = p.hours ?? null;
   const shown = range ? slots.filter((s) => brusselsHour(s.startsAt) >= range.from && brusselsHour(s.startsAt) < range.to) : slots;
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(p.today, i));
-  const price = selected ? quote(venue, n, selected.discountPct) : null;
+  const price = selected && offer ? quote(offer, n, selected.discountPct) : null;
   const cat = CATEGORIES[venue.category];
 
   return (
@@ -91,9 +109,13 @@ export default async function VenuePage({ params, searchParams }: Props) {
           </h1>
         </div>
         <div className="facts">
-          <span className="fact"><IconClock size={16} /> {venue.durationMin} min</span>
-          <span className="fact"><IconUsers size={16} /> {venue.groupMin === venue.groupMax ? venue.groupMax : `${venue.groupMin} à ${venue.groupMax}`} pers.</span>
-          <span className="fact">{euros(venue.priceCents)} {venue.priceUnit === 'session' ? 'la séance' : 'par pers.'}</span>
+          {offer && (
+            <>
+              <span className="fact"><IconClock size={16} /> {offer.durationMin} min</span>
+              <span className="fact"><IconUsers size={16} /> {offer.groupMin === offer.groupMax ? offer.groupMax : `${offer.groupMin} à ${offer.groupMax}`} pers.</span>
+              <span className="fact">{euros(offer.priceCents)} {offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}</span>
+            </>
+          )}
         </div>
         {venue.description && <p style={{ color: 'var(--ink-2)' }}>{venue.description}</p>}
         {venue.address && (
@@ -110,6 +132,16 @@ export default async function VenuePage({ params, searchParams }: Props) {
           <h2 id="slots-title">Créneaux creux</h2>
           <span className="small muted">{longDate(p.date)}</span>
         </div>
+        {offerList.length > 1 && (
+          <nav className="offer-tabs" aria-label="Choisir la prestation">
+            {offerList.map((o) => (
+              <Link key={o.id} href={withParams(`/lieu/${slug}`, base, { offre: o.id, slot: undefined })} aria-current={offer?.id === o.id ? 'true' : undefined} scroll={false}>
+                <b>{o.name}</b>
+                <span>{o.durationMin} min · {euros(o.priceCents)} {o.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
+              </Link>
+            ))}
+          </nav>
+        )}
         <nav className="days" aria-label="Choisir le jour">
           {[...days, ...(days.includes(p.date) ? [] : [p.date])].map((d) => {
             const c = dayChip(d, p.today);
@@ -125,11 +157,11 @@ export default async function VenuePage({ params, searchParams }: Props) {
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="label">Personnes</span>
           <div className="stepper">
-            <Link href={withParams(`/lieu/${slug}`, base, { n: n - 1, slot: selected?.id })} aria-label="Une personne de moins" aria-disabled={n <= venue.groupMin ? 'true' : undefined}>
+            <Link href={withParams(`/lieu/${slug}`, base, { n: n - 1, slot: selected?.id })} aria-label="Une personne de moins" aria-disabled={!offer || n <= offer.groupMin ? 'true' : undefined}>
               <IconMinus size={16} strokeWidth={2} />
             </Link>
             <b>{n}</b>
-            <Link href={withParams(`/lieu/${slug}`, base, { n: n + 1, slot: selected?.id })} aria-label="Une personne de plus" aria-disabled={n >= venue.groupMax ? 'true' : undefined}>
+            <Link href={withParams(`/lieu/${slug}`, base, { n: n + 1, slot: selected?.id })} aria-label="Une personne de plus" aria-disabled={!offer || n >= offer.groupMax ? 'true' : undefined}>
               <IconPlus size={16} strokeWidth={2} />
             </Link>
           </div>
@@ -157,7 +189,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
             {shown.map((s) => {
               const full = s.remaining < need;
               const boost = s.discountPct > venue.baseDiscountPct;
-              const few = !full && venue.capacityUnit === 'places' && s.remaining <= 3;
+              const few = !full && s.offer.capacityUnit === 'places' && s.remaining <= 3;
               return (
                 <Link
                   key={s.id}
@@ -188,7 +220,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
               <Deal pct={selected.discountPct} small />
             </div>
             <span className="small muted">
-              {venue.priceUnit === 'session' ? 'la séance' : `pour ${n} pers.`} · {timeLabel(selected.startsAt)}
+              {offer?.priceUnit === 'session' ? 'la séance' : `pour ${n} pers.`} · {timeLabel(selected.startsAt)}
             </span>
           </div>
           <Link className="btn btn-primary btn-lg" href={withParams('/reserver', { slot: selected.id, n })}>

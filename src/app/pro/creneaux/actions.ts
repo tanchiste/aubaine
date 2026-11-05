@@ -1,13 +1,22 @@
 'use server';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
-import { bookings, slots } from '@/db/schema';
+import { bookings, offers, slots } from '@/db/schema';
 import { getMyVenues, requireUser } from '@/lib/auth';
 import { MAX_DISCOUNT, MIN_DISCOUNT } from '@/lib/pricing';
 
 export type SlotFormState = { ok?: boolean; error?: string; message?: string };
+
+/** Nos messages restent lisibles, les erreurs techniques (SQL…) ne sont jamais montrées */
+function friendly(e: unknown, fallback: string) {
+  const msg = e instanceof Error ? e.message : '';
+  if (/unique|duplicate/i.test(msg)) return 'Un créneau existe déjà à cette heure pour cette prestation.';
+  if (!msg || /failed query|syntax|relation|column|violates/i.test(msg)) return fallback;
+  return msg;
+}
 
 async function ownVenue(venueId: string) {
   const user = await requireUser('/pro/creneaux');
@@ -18,77 +27,120 @@ async function ownVenue(venueId: string) {
   return m.venue;
 }
 
-const schema = z.object({
+const createSchema = z.object({
   venueId: z.uuid(),
+  offerId: z.uuid({ message: 'Choisis une prestation.' }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide.'),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Heure invalide.'),
   discountPct: z.coerce.number().int().min(MIN_DISCOUNT, `Remise minimum −${MIN_DISCOUNT} %.`).max(MAX_DISCOUNT, `Remise maximum −${MAX_DISCOUNT} %.`),
-  capacity: z.coerce.number().int().min(1, 'Capacité minimum 1.').max(200),
+  capacity: z.coerce.number().int().min(1, 'Au moins 1 place.').max(200),
   weeks: z.coerce.number().int().min(1).max(12).default(1),
 });
 
-/** Ouvre un créneau ponctuel, ou le même horaire chaque jour coché pendant N semaines */
+/** Ouvre un créneau, ou le même horaire les jours cochés pendant N semaines */
 export async function createSlotsAction(_prev: SlotFormState, form: FormData): Promise<SlotFormState> {
   try {
-    const parsed = schema.safeParse(Object.fromEntries(form));
+    const parsed = createSchema.safeParse(Object.fromEntries(form));
     if (!parsed.success) return { error: parsed.error.issues[0].message };
     const d = parsed.data;
     const venue = await ownVenue(d.venueId);
+    const [offer] = await db.select().from(offers).where(and(eq(offers.id, d.offerId), eq(offers.venueId, venue.id)));
+    if (!offer) return { error: 'Prestation introuvable.' };
+    if (offer.priceCents <= 0) return { error: 'Indique d’abord le prix de cette prestation (onglet Établissement).' };
     const days = form.getAll('dow').map(Number).filter((n) => n >= 1 && n <= 7);
     const span = days.length ? d.weeks * 7 - 1 : 0;
     const res = await db.execute<{ id: string }>(sql`
-      insert into slots (venue_id, starts_at, capacity, discount_pct)
-      select ${venue.id}, (day::date + ${d.time}::time) at time zone 'Europe/Brussels', ${d.capacity}, ${d.discountPct}
+      insert into slots (venue_id, offer_id, starts_at, capacity, discount_pct)
+      select ${venue.id}, ${offer.id}, (day::date + ${d.time}::time) at time zone 'Europe/Brussels', ${d.capacity}, ${d.discountPct}
       from generate_series(${d.date}::date, ${d.date}::date + ${span}::int, interval '1 day') as day
       where ((day::date + ${d.time}::time) at time zone 'Europe/Brussels') > now()
         ${days.length ? sql`and extract(isodow from day) in (${sql.join(days.map((n) => sql`${n}`), sql`, `)})` : sql``}
-      on conflict (venue_id, starts_at) do nothing
+      on conflict (offer_id, starts_at) do nothing
       returning id`);
     const n = [...res].length;
     revalidatePath('/pro', 'layout');
     revalidatePath('/');
-    if (n === 0) return { error: 'Aucun créneau créé : horaire déjà passé ou déjà ouvert.' };
+    if (n === 0) return { error: 'Aucun créneau ouvert : horaire déjà passé ou déjà ouvert.' };
     return { ok: true, message: `${n} créneau${n > 1 ? 'x' : ''} ouvert${n > 1 ? 's' : ''}.` };
   } catch (e) {
     console.error(e);
-    return { error: 'Les créneaux n’ont pas pu être créés. Réessaie.' };
+    return { error: friendly(e, 'Les créneaux n’ont pas pu être ouverts. Réessaie.') };
   }
 }
 
 async function ownSlot(slotId: string) {
   if (!z.uuid().safeParse(slotId).success) throw new Error('Créneau introuvable.');
-  const [s] = await db.select({ venueId: slots.venueId }).from(slots).where(eq(slots.id, slotId));
-  if (!s) throw new Error('Créneau introuvable.');
-  await ownVenue(s.venueId);
+  const [row] = await db
+    .select({ slot: slots, offer: offers })
+    .from(slots)
+    .innerJoin(offers, eq(offers.id, slots.offerId))
+    .where(eq(slots.id, slotId));
+  if (!row) throw new Error('Créneau introuvable.');
+  await ownVenue(row.slot.venueId);
+  const [{ used, n }] = await db
+    .select({
+      used: sql<number>`coalesce(sum(case when ${row.offer.capacityUnit} = 'places' then ${bookings.people} else 1 end), 0)::int`,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(bookings)
+    .where(and(eq(bookings.slotId, slotId), inArray(bookings.status, ['confirmed', 'checked_in'])));
+  return { ...row, used, bookings: n };
+}
+
+const updateSchema = z.object({
+  slotId: z.uuid(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Heure invalide.').optional(),
+  discountPct: z.coerce.number().int().min(MIN_DISCOUNT, `Remise minimum −${MIN_DISCOUNT} %.`).max(MAX_DISCOUNT, `Remise maximum −${MAX_DISCOUNT} %.`),
+  capacity: z.coerce.number().int().min(1).max(200),
+});
+
+/** Modifier un créneau : remise, places, et l'heure tant que personne n'a réservé */
+export async function updateSlotAction(_prev: SlotFormState, form: FormData): Promise<SlotFormState> {
+  try {
+    const parsed = updateSchema.safeParse(Object.fromEntries(form));
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+    const d = parsed.data;
+    const { slot, used, bookings: nb } = await ownSlot(d.slotId);
+    if (d.capacity < used) return { error: `Impossible de descendre sous ${used} : c’est déjà réservé.` };
+    const patch: Record<string, unknown> = { discountPct: d.discountPct, capacity: d.capacity };
+    if (d.time) {
+      const [{ target }] = [
+        ...(await db.execute<{ target: Date }>(
+          sql`select ((${slot.startsAt.toISOString()}::timestamptz at time zone 'Europe/Brussels')::date + ${d.time}::time) at time zone 'Europe/Brussels' as target`,
+        )),
+      ];
+      const when = new Date(target);
+      const moved = when.getTime() !== slot.startsAt.getTime();
+      if (moved && nb > 0) return { error: 'L’heure ne peut plus changer : des clients ont déjà réservé.' };
+      if (moved && when.getTime() <= Date.now()) return { error: 'Cette heure est déjà passée.' };
+      if (moved) patch.startsAt = when;
+    }
+    await db.update(slots).set(patch).where(eq(slots.id, slot.id));
+    revalidatePath('/pro', 'layout');
+    revalidatePath('/');
+    return { ok: true, message: 'Créneau mis à jour.' };
+  } catch (e) {
+    console.error(e);
+    return { error: friendly(e, 'Le créneau n’a pas pu être modifié. Réessaie.') };
+  }
 }
 
 /** Fermer : le créneau disparaît de l'app, les réservations déjà prises restent valables */
 export async function toggleSlotAction(form: FormData) {
-  const id = String(form.get('slotId'));
-  await ownSlot(id);
-  await db.update(slots).set({ isOpen: sql`not ${slots.isOpen}` }).where(eq(slots.id, id));
-  revalidatePath('/pro/creneaux');
+  const { slot } = await ownSlot(String(form.get('slotId')));
+  await db.update(slots).set({ isOpen: !slot.isOpen }).where(eq(slots.id, slot.id));
+  revalidatePath('/pro', 'layout');
   revalidatePath('/');
 }
 
 /** Supprimer n'est possible que sans réservation */
 export async function deleteSlotAction(form: FormData) {
-  const id = String(form.get('slotId'));
-  await ownSlot(id);
-  const [b] = await db.select({ id: bookings.id }).from(bookings).where(and(eq(bookings.slotId, id), inArray(bookings.status, ['confirmed', 'checked_in']))).limit(1);
-  if (b) return;
-  await db.delete(bookings).where(eq(bookings.slotId, id));
-  await db.delete(slots).where(eq(slots.id, id));
-  revalidatePath('/pro/creneaux');
+  const { slot, bookings: nb } = await ownSlot(String(form.get('slotId')));
+  if (nb > 0) return;
+  await db.delete(bookings).where(eq(bookings.slotId, slot.id));
+  await db.delete(slots).where(eq(slots.id, slot.id));
+  revalidatePath('/pro', 'layout');
   revalidatePath('/');
-}
-
-export async function setDiscountAction(form: FormData) {
-  const id = String(form.get('slotId'));
-  const pct = Number(form.get('discountPct'));
-  if (!Number.isInteger(pct) || pct < MIN_DISCOUNT || pct > MAX_DISCOUNT) return;
-  await ownSlot(id);
-  await db.update(slots).set({ discountPct: pct }).where(eq(slots.id, id));
-  revalidatePath('/pro/creneaux');
-  revalidatePath('/');
+  const back = String(form.get('back') ?? '');
+  redirect(/^\/pro\/creneaux(\?[\w=&%-]*)?$/.test(back) ? back : '/pro/creneaux');
 }

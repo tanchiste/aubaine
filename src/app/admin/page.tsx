@@ -8,7 +8,7 @@ import { IconImage } from '@/components/icons';
 import { CATEGORIES } from '@/lib/categories';
 import { ago, euros } from '@/lib/format';
 import { COMMISSION_PCT, discounted } from '@/lib/pricing';
-import { checklist, firstPhotos, isReady } from '@/lib/venues';
+import { checklist, firstPhotos, isReady, offersOf } from '@/lib/venues';
 import { ReviewForm } from './ReviewForm';
 
 const EVENT_LABEL: Record<string, string> = {
@@ -40,22 +40,24 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const published = all.filter((v) => v.status === 'published');
   const cities = [...new Set(published.map((v) => v.city))].join(', ');
   const ids = all.map((v) => v.id);
-  const [covers, photoCounts] = await Promise.all([
+  const [covers, photoCounts, offerMap] = await Promise.all([
     firstPhotos(ids),
     ids.length
       ? db.select({ venueId: venuePhotos.venueId, n: count() }).from(venuePhotos).where(inArray(venuePhotos.venueId, ids)).groupBy(venuePhotos.venueId)
       : Promise.resolve([]),
+    offersOf(ids),
   ]);
   const photoCount = (vid: string) => photoCounts.find((p) => p.venueId === vid)?.n ?? 0;
   const oldest = queue[0]?.submittedAt;
 
+  const previewOffer = selected ? (offerMap.get(selected.id) ?? []).find((o) => o.isActive) ?? null : null;
   let detail = null;
   if (selected) {
     const [owners, events] = await Promise.all([
       db.select({ email: users.email, firstName: users.firstName }).from(venueMembers).innerJoin(users, eq(users.id, venueMembers.userId)).where(eq(venueMembers.venueId, selected.id)),
       db.select().from(venueEvents).where(eq(venueEvents.venueId, selected.id)).orderBy(desc(venueEvents.createdAt)).limit(8),
     ]);
-    const items = checklist(selected, photoCount(selected.id));
+    const items = checklist(selected, photoCount(selected.id), offerMap.get(selected.id) ?? []);
     detail = { owners, events, items, ready: isReady(items) };
   }
 
@@ -92,7 +94,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </div>
           {queue.length === 0 && <p className="card small muted">Aucune fiche en attente.</p>}
           {queue.map((v) => {
-            const items = checklist(v, photoCount(v.id));
+            const items = checklist(v, photoCount(v.id), offerMap.get(v.id) ?? []);
             const ko = items.filter((i) => i.state === 'ko');
             return (
               <Link key={v.id} className="queue-item" href={`/admin?id=${v.id}`} aria-current={selected?.id === v.id ? 'true' : undefined}>
@@ -177,14 +179,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   <div className="row" style={{ alignItems: 'flex-start' }}>
                     <span className="grow">
                       <b className="display" style={{ fontSize: 16 }}>{selected.name}</b>
-                      <span className="small muted" style={{ display: 'block' }}>{CATEGORIES[selected.category].short} · {selected.city} · {selected.durationMin} min</span>
+                      <span className="small muted" style={{ display: 'block' }}>{CATEGORIES[selected.category].short} · {selected.city}{previewOffer ? ` · ${previewOffer.durationMin} min` : ''}</span>
                     </span>
                     <Deal pct={selected.baseDiscountPct} small />
                   </div>
-                  {selected.priceCents > 0 && (
+                  {previewOffer && previewOffer.priceCents > 0 && (
                     <p className="small" style={{ color: 'var(--ink-2)' }}>
-                      dès <b style={{ fontSize: 15, color: 'var(--ink)' }}>{euros(discounted(selected.priceCents, selected.baseDiscountPct))}</b>{' '}
-                      <s className="muted">{euros(selected.priceCents)}</s> {selected.priceUnit === 'session' ? 'la séance' : 'par personne'}
+                      dès <b style={{ fontSize: 15, color: 'var(--ink)' }}>{euros(discounted(previewOffer.priceCents, selected.baseDiscountPct))}</b>{' '}
+                      <s className="muted">{euros(previewOffer.priceCents)}</s> {previewOffer.priceUnit === 'session' ? 'la séance' : 'par personne'}
                     </p>
                   )}
                 </div>

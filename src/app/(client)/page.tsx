@@ -11,7 +11,7 @@ import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
-import { bestDeals, cities, explorer, lastMinute, searchVenues } from '@/lib/venues';
+import { bestDeals, cities, explorer, lastMinute, minPrice, searchVenues } from '@/lib/venues';
 
 type SP = Record<string, string | string[] | undefined>;
 
@@ -237,7 +237,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           <div className="deals">
             {deals.map(({ venue, photoId, slot }) => {
               const d = brusselsDate(slot.startsAt);
-              const unit = discounted(venue.priceCents, slot.discountPct);
+              const unit = discounted(slot.offer.priceCents, slot.discountPct);
               return (
                 <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: d === today ? undefined : d, slot: slot.id })}>
                   <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category}>
@@ -251,8 +251,8 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                     </span>
                     <span className="row" style={{ ['--gap' as string]: '6px', marginTop: 2 }}>
                       <b className="num" style={{ fontSize: 16 }}>{euros(unit)}</b>
-                      <s className="small muted">{euros(venue.priceCents)}</s>
-                      <span className="small muted">{venue.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
+                      <s className="small muted">{euros(slot.offer.priceCents)}</s>
+                      <span className="small muted">{slot.offer.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
                     </span>
                   </span>
                 </Link>
@@ -323,7 +323,8 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           <div className="venue-grid">
             {items.map(({ venue, photoId, slots }) => {
               const best = Math.max(...slots.map((s) => s.discountPct));
-              const from = Math.min(...slots.map((s) => discounted(venue.priceCents, s.discountPct)));
+              const from = minPrice(slots);
+              const cheapest = slots.reduce((m, s) => (discounted(s.offer.priceCents, s.discountPct) < discounted(m.offer.priceCents, m.discountPct) ? s : m));
               const shown = slots.slice(0, 3);
               const link = withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined) });
               return (
@@ -344,7 +345,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <span className="small muted">dès</span> <b className="num" style={{ fontSize: 17 }}>{euros(from)}</b>
-                          <div className="small muted">{venue.priceUnit === 'session' ? 'la séance' : 'par pers.'}</div>
+                          <div className="small muted">{cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}</div>
                         </div>
                       </div>
                     </div>

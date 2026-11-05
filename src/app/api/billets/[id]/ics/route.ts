@@ -7,8 +7,8 @@ const esc = (s: string) => s.replace(/[\\,;]/g, (m) => '\\' + m).replace(/\n/g, 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const row = await getBooking((await ctx.params).id);
   if (!row) return new Response('Introuvable', { status: 404 });
-  const { booking, slot, venue } = row;
-  const end = new Date(slot.startsAt.getTime() + venue.durationMin * 60_000);
+  const { booking, slot, venue, offer } = row;
+  const end = new Date(slot.startsAt.getTime() + offer.durationMin * 60_000);
   const ics = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',

@@ -22,15 +22,11 @@ export type VenueFormValues = {
   color: string;
 };
 
-const fmt = (n: number) => n.toLocaleString('fr-BE', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + ' €';
 
 export function VenueForm({ v, locked }: { v: VenueFormValues; locked: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveVenueAction, {});
-  const [price, setPrice] = useState(v.priceCents ? String(v.priceCents / 100).replace('.', ',') : '');
   const [pct, setPct] = useState(v.baseDiscountPct);
-  const [unit, setUnit] = useState(v.capacityUnit);
   const [desc, setDesc] = useState(v.description ?? '');
-  const priceNum = parseFloat(price.replace(',', '.')) || 0;
 
   return (
     <form action={action} className="stack" style={{ ['--gap' as string]: '14px' }}>
@@ -73,76 +69,12 @@ export function VenueForm({ v, locked }: { v: VenueFormValues; locked: boolean }
           </label>
         </section>
 
-        <section className="card stack" aria-labelledby="f-session">
-          <h2 id="f-session" style={{ fontSize: 15, fontWeight: 800 }}>Une séance</h2>
-          <div className="grid-3">
-            <label className="field">
-              <span>Durée (min)</span>
-              <input className="input" name="durationMin" type="number" inputMode="numeric" min={5} max={480} defaultValue={v.durationMin} required />
-            </label>
-            <label className="field">
-              <span>Groupe min.</span>
-              <input className="input" name="groupMin" type="number" inputMode="numeric" min={1} max={50} defaultValue={v.groupMin} required />
-            </label>
-            <label className="field">
-              <span>Groupe max.</span>
-              <input className="input" name="groupMax" type="number" inputMode="numeric" min={1} max={100} defaultValue={v.groupMax} required />
-            </label>
-          </div>
-          <div className="field">
-            <span className="label">Comment se remplit un créneau ?</span>
-            <div className="segmented" role="radiogroup">
-              <label>
-                <input type="radio" name="capacityUnit" value="places" checked={unit === 'places'} onChange={() => setUnit('places')} />
-                <span>Par places</span>
-              </label>
-              <label>
-                <input type="radio" name="capacityUnit" value="groupes" checked={unit === 'groupes'} onChange={() => setUnit('groupes')} />
-                <span>Par salle ou piste</span>
-              </label>
-            </div>
-            <span className="hint">
-              {unit === 'places' ? 'Plusieurs groupes peuvent partager le créneau (karting, VR, laser game).' : 'Chaque réservation prend une salle ou une piste entière (escape game, bowling, spa).'}
-            </span>
-          </div>
-          <label className="field" style={{ maxWidth: 220 }}>
-            <span>{unit === 'places' ? 'Places par créneau' : 'Salles ou pistes'}</span>
-            <input className="input" name="capacity" type="number" inputMode="numeric" min={1} max={200} defaultValue={v.capacity} required />
-          </label>
-        </section>
-
         <section className="card stack" aria-labelledby="f-price">
-          <h2 id="f-price" style={{ fontSize: 15, fontWeight: 800 }}>Prix et remise</h2>
-          <div className="grid-2">
-            <label className="field">
-              <span>Prix normal (€)</span>
-              <input className="input" name="price" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="25" required />
-            </label>
-            <div className="field">
-              <span className="label">Le prix s’entend</span>
-              <div className="segmented" role="radiogroup">
-                <label>
-                  <input type="radio" name="priceUnit" value="person" defaultChecked={v.priceUnit === 'person'} />
-                  <span>par pers.</span>
-                </label>
-                <label>
-                  <input type="radio" name="priceUnit" value="session" defaultChecked={v.priceUnit === 'session'} />
-                  <span>la séance</span>
-                </label>
-              </div>
-            </div>
-          </div>
+          <h2 id="f-price" style={{ fontSize: 15, fontWeight: 800 }}>Remise habituelle</h2>
           <label className="field">
-            <span>Remise de base sur tes heures creuses : −{pct} %</span>
+            <span>Remise proposée par défaut sur tes heures creuses : −{pct} %</span>
             <input type="range" name="baseDiscountPct" min={20} max={60} step={5} value={pct} onChange={(e) => setPct(Number(e.target.value))} style={{ accentColor: 'var(--primary)' }} />
-            <span className="hint">
-              Entre −20 % et −60 %.{' '}
-              {priceNum > 0 && (
-                <>
-                  Les clients paient <b style={{ color: 'var(--ink)' }}>{fmt(Math.round(priceNum * (100 - pct)) / 100)}</b> au lieu de {fmt(priceNum)}.
-                </>
-              )}
-            </span>
+            <span className="hint">Entre −20 % et −60 %. Elle est proposée quand tu ouvres un créneau, et tu peux la changer créneau par créneau.</span>
           </label>
         </section>
 

@@ -7,7 +7,7 @@ import { db } from '@/db';
 import { users, venueEvents, venueMembers, venuePhotos, venues } from '@/db/schema';
 import { requireAdmin } from '@/lib/auth';
 import { sendMail } from '@/lib/email';
-import { checklist, isReady } from '@/lib/venues';
+import { checklist, isReady, offersOf } from '@/lib/venues';
 
 export type AdminState = { ok?: boolean; error?: string; message?: string };
 
@@ -34,7 +34,8 @@ export async function reviewAction(_prev: AdminState, form: FormData): Promise<A
 
     if (decision === 'approve') {
       const photos = await db.select({ id: venuePhotos.id }).from(venuePhotos).where(eq(venuePhotos.venueId, v.id));
-      if (!isReady(checklist(v, photos.length))) return { error: 'La checklist n’est pas complète.' };
+      const offerList = (await offersOf([v.id])).get(v.id) ?? [];
+      if (!isReady(checklist(v, photos.length, offerList))) return { error: 'La checklist n’est pas complète.' };
       await db.update(venues).set({ status: 'published', publishedAt: new Date(), reviewMessage: null, updatedAt: new Date() }).where(eq(venues.id, v.id));
       await db.insert(venueEvents).values({ venueId: v.id, actorId: admin.id, action: 'approved', message: message || null });
       await notifyOwners(v.id, `${v.name} est en ligne sur Aubaine`, `Bonne nouvelle : ta fiche ${v.name} est en ligne.${message ? `\n\n${message}` : ''}\n\n${app}/pro`);

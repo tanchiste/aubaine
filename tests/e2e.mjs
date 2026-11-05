@@ -98,15 +98,18 @@ try {
   ok(await dk.locator('.tool-btn:has-text("16 h – 18 h")').isVisible(), 'La plage horaire s’affiche dans le bouton Horaire');
   await dk.close();
 
-  // Téléphone : nombre de personnes, heure et tri sont dans le panneau « Filtres »
+  // Téléphone : barre compacte « Aujourd'hui / Plus tard », personnes et horaire visibles
   await client.goto(`${BASE}/?ville=tout`);
-  ok(!(await client.locator('.tool-btn').isVisible()), 'Sur téléphone, l’écran d’accueil est allégé (heure et personnes dans « Filtres »)');
-  await client.click('.filter-btn');
-  await client.click('.sheet-options button:has-text("Soir")');
-  await client.click('.sheet .stepper button[aria-label="Une personne de plus"]');
-  await client.click('.sheet button:has-text("Voir les offres")');
+  ok(!(await client.locator('.days-full').isVisible()) && await client.locator('.day-pill:has-text("Aujourd’hui")').isVisible() && await client.locator('.day-pill-cal').isVisible(), 'Téléphone : plus de bande de 7 dates, juste « Aujourd’hui » et « Plus tard »');
+  await client.click('.toolbar .stepper a[aria-label="Une personne de plus"]');
+  await client.waitForURL((u) => u.searchParams.get('n') === '3');
+  await client.click('.tool-btn');
+  await client.click('.menu-time a:has-text("Soir")');
   await client.waitForURL((u) => u.searchParams.get('moment') === 'soir' && u.searchParams.get('n') === '3');
-  ok((await client.locator('.filter-count').textContent()).trim() === '2', 'Panneau « Filtres » : soir et 3 personnes appliqués, compteur à 2');
+  ok(await client.locator('.tool-btn:has-text("Soir")').isVisible(), 'Téléphone : personnes et horaire réglés directement dans la barre');
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  await client.goto(`${BASE}/?ville=tout&date=${tomorrow}`);
+  ok(await client.locator('.day-pill-cal[aria-current="true"]').isVisible(), 'Une date choisie plus tard s’affiche à la place de « Plus tard »');
   await client.goto(`${BASE}/lieu/bulle-d-o?moment=matin`);
   const ficheHours = (await client.locator('.slot b').allTextContents()).map((t) => Number(t.slice(0, 2)));
   ok(ficheHours.length > 0 && ficheHours.every((h) => h < 12), 'La fiche garde le filtre « matin » (et propose toute la journée)');

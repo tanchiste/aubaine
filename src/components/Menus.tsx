@@ -28,14 +28,15 @@ const VERS = Array.from({ length: 14 }, (_, i) => i + 9);
 type Preset = { key: string; label: string; hint: string; href: string; active: boolean };
 
 /** Horaire : toute la journée, un moment, ou « vers 14 h » (créneaux de 14 h à 16 h) */
-export function TimeMenu({ label, presets, de, preciseHref }: { label: string; presets: Preset[]; de?: number; a?: number; preciseHref: string }) {
+export function TimeMenu({ label, shortLabel, presets, de, preciseHref }: { label: string; shortLabel?: string; presets: Preset[]; de?: number; a?: number; preciseHref: string }) {
   const { open, setOpen, ref } = usePopover();
   const router = useRouter();
   return (
     <div className="picker" ref={ref}>
       <button type="button" className="tool-btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <IconClock size={16} />
-        <span>{label}</span>
+        <span className="lbl-long">{label}</span>
+        <span className="lbl-short">{shortLabel ?? label}</span>
         <IconChevronDown size={16} />
       </button>
       {open && (

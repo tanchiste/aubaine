@@ -7,7 +7,6 @@ import { HeroDial } from '@/components/brand';
 import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
 import { SortMenu, TimeMenu } from '@/components/Menus';
-import { FilterSheet } from '@/components/FilterSheet';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
@@ -57,12 +56,6 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     tri: sort !== 'remise' ? sort : undefined,
     ville: city ?? (raw.ville === 'tout' ? 'tout' : undefined),
   };
-  // Sur téléphone, personnes, horaire et tri sont dans « Filtres » : on les rappelle en pastilles.
-  const hidden = [
-    hours ? { key: 'hours', label: hours.label, remove: withParams('/', base, { moment: undefined, de: undefined, a: undefined }) } : null,
-    n !== 2 ? { key: 'n', label: `${n} pers.`, remove: withParams('/', base, { n: undefined }) } : null,
-    sort !== 'remise' ? { key: 'sort', label: SORTS[sort], remove: withParams('/', base, { tri: undefined }) } : null,
-  ].filter((f): f is { key: string; label: string; remove: string } => f !== null);
   const anyFilter = !!(category || q || hours || n !== 2 || sort !== 'remise');
 
   // Rien trouvé : on teste ce qui donnerait des résultats en relâchant un filtre à la fois.
@@ -144,7 +137,21 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
         <div className="toolbar">
           <div className="tool tool-days">
             <span className="tool-label">Jour</span>
-            <nav className="days" aria-label="Choisir le jour">
+            <div className="days-compact">
+              <Link className="day-pill" href={withParams('/', base, { date: undefined })} aria-current={date === today && !rolled ? 'true' : undefined}>
+                Aujourd’hui
+              </Link>
+              <DatePicker
+                pill
+                active={date !== today || rolled}
+                value={date}
+                min={today}
+                max={addDays(today, MAX_DAYS - 1)}
+                hrefBase={withParams('/', base, { date: '__DATE__' })}
+                label={date !== today || rolled ? relativeDay(date, today) : 'Plus tard'}
+              />
+            </div>
+            <nav className="days days-full" aria-label="Choisir le jour">
               {days.map((d) => {
                 const c = dayChip(d, today);
                 return (
@@ -163,7 +170,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               <DatePicker value={date} min={today} max={addDays(today, MAX_DAYS - 1)} hrefBase={withParams('/', base, { date: '__DATE__' })} label="Plus tard" />
             </nav>
           </div>
-          <div className="tool tool-desktop">
+          <div className="tool">
             <span className="tool-label">Personnes</span>
             <div className="stepper">
               <Link href={withParams('/', base, { n: n - 1 === 2 ? undefined : n - 1 })} aria-label="Une personne de moins" aria-disabled={n <= 1 ? 'true' : undefined}>
@@ -175,10 +182,11 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               </Link>
             </div>
           </div>
-          <div className="tool tool-desktop">
+          <div className="tool">
             <span className="tool-label">Horaire</span>
             <TimeMenu
               label={hours ? hours.label : 'Toute la journée'}
+              shortLabel={hours ? hours.label : 'Journée'}
               de={p.de}
               a={p.a}
               preciseHref={withParams('/', { ...base, moment: undefined }, { de: '__DE__', a: '__A__' })}
@@ -198,11 +206,6 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
 
         <div className="cats-row">
           <nav className="chips" aria-label="Catégories">
-            <FilterSheet
-              base={{ date: base.date, cat: base.cat, q: base.q, ville: base.ville }}
-              current={{ n, moment, de: p.de, a: p.a, sort }}
-              maxPeople={MAX_PEOPLE}
-            />
             <Link className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
               Tout
             </Link>
@@ -219,15 +222,6 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           )}
         </div>
 
-        {hidden.length > 0 && (
-          <div className="active-filters only-phone" aria-label="Filtres actifs">
-            {hidden.map((f) => (
-              <Link key={f.key} className="filter-pill" href={f.remove} aria-label={`Retirer le filtre ${f.label}`}>
-                {f.label} <IconX size={12} />
-              </Link>
-            ))}
-          </div>
-        )}
       </section>
 
       {deals.length > 0 && (

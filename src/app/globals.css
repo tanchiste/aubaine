@@ -565,8 +565,31 @@ p { margin: 0; }
 .menu-precise { display: flex; flex-direction: column; gap: 10px; padding: 6px 8px 8px; }
 .menu-precise .select { height: 40px; font-size: 14px; padding: 0 10px; }
 
+/* Téléphone : barre compacte sur deux lignes (jour, puis personnes et horaire) */
+.days-compact { display: flex; gap: 8px; }
+.day-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--soft); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.day-pill:hover { color: var(--ink); border-color: var(--line); }
+.day-pill[aria-current='true'] { background: var(--night); border-color: var(--night); color: #fff; }
+.day-pill-cal span { color: inherit; font-size: 14px; }
+.day-pill-cal svg { color: var(--primary); }
+.day-pill-cal[aria-current='true'] svg { color: #fff; }
+.days-compact .datepick { flex: 1; }
+.days-compact .day-pill-cal { width: 100%; }
+.days-compact > .day-pill { flex: none; }
 @media (max-width: 699px) {
-  .tool-desktop, .sort-menu { display: none; }
+  .days-full { display: none; }
+  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 10px; background: var(--card); border-radius: 18px; padding: 12px; }
+  .tool-days { grid-column: 1 / -1; }
+  .tool-label { display: block; }
+  .toolbar .stepper { width: 100%; justify-content: space-between; height: 42px; border-radius: 12px; background: var(--soft); border-color: var(--line-2); }
+  .toolbar .stepper b { min-width: 0; }
+  .toolbar .tool-btn { width: 100%; height: 42px; padding: 0 10px; gap: 6px; font-size: 13px; }
+  .toolbar .tool-btn span { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+  .toolbar .picker { width: 100%; }
+  .menu-time { width: min(300px, calc(100vw - 32px)); }
+}
+@media (min-width: 700px) {
+  .days-compact { display: none; }
 }
 @media (min-width: 700px) {
   .only-phone { display: none; }
@@ -596,3 +619,6 @@ p { margin: 0; }
 .menu-vers { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 8px 6px 4px 12px; border-top: 1px solid var(--line-2); font-size: 14px; font-weight: 600; cursor: pointer; }
 .menu-vers .select { width: 104px; height: 38px; font-size: 14px; padding: 0 10px; }
 .menu-vers.on .select { border-color: var(--night); background: #fff; }
+
+.lbl-short { display: none; }
+@media (max-width: 699px) { .lbl-long { display: none; } .lbl-short { display: inline; } }

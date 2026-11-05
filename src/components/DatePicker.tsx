@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 /** Bouton « Autre date » qui ouvre le calendrier natif du téléphone ou de l'ordinateur */
-export function DatePicker({ value, min, max, hrefBase, label = 'Autre date' }: { value: string; min: string; max: string; hrefBase: string; label?: string }) {
+export function DatePicker({ value, min, max, hrefBase, label = 'Autre date', pill = false, active = false }: { value: string; min: string; max: string; hrefBase: string; label?: string; pill?: boolean; active?: boolean }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const open = () => {
@@ -18,7 +18,7 @@ export function DatePicker({ value, min, max, hrefBase, label = 'Autre date' }: 
   };
   return (
     <span className="datepick">
-      <button type="button" className="day day-cal" onClick={open} aria-label="Choisir une autre date">
+      <button type="button" className={pill ? 'day-pill day-pill-cal' : 'day day-cal'} onClick={open} aria-label="Choisir une autre date" aria-current={active ? 'true' : undefined}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
           <path d="M3.5 10h17M8 3v4M16 3v4" />

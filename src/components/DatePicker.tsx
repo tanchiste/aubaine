@@ -35,7 +35,7 @@ export function DatePicker({ value, min, max, hrefBase, label = 'Autre date', pi
         defaultValue={value}
         onChange={(e) => {
           const d = e.target.value;
-          if (d) router.push(hrefBase.replace('__DATE__', d));
+          if (d) router.push(hrefBase.replace('__DATE__', d), { scroll: false });
         }}
       />
     </span>

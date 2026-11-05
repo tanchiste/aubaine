@@ -174,14 +174,14 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               {days.map((d) => {
                 const c = dayChip(d, today);
                 return (
-                  <Link key={d} className="day" href={withParams('/', base, { date: d === today ? undefined : d })} aria-current={d === date ? 'true' : undefined}>
+                  <Link scroll={false} key={d} className="day" href={withParams('/', base, { date: d === today ? undefined : d })} aria-current={d === date ? 'true' : undefined}>
                     <span>{c.top}</span>
                     <b>{c.num}</b>
                   </Link>
                 );
               })}
               {extraDay && (
-                <Link className="day" href={withParams('/', base)} aria-current="true">
+                <Link scroll={false} className="day" href={withParams('/', base)} aria-current="true">
                   <span>{dayChip(extraDay, today).top}</span>
                   <b>{dayChip(extraDay, today).num}</b>
                 </Link>
@@ -208,17 +208,17 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
 
         <div className="cats-row">
           <nav className="chips" aria-label="Catégories">
-            <Link className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
+            <Link scroll={false} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
               Tout
             </Link>
             {CATEGORY_KEYS.filter((k) => k !== 'autre').map((k) => (
-              <Link key={k} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
+              <Link scroll={false} key={k} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
                 {CATEGORIES[k].short}
               </Link>
             ))}
           </nav>
           {anyFilter && (
-            <Link className="reset-link" href={withParams('/', { ville: base.ville, date: base.date })}>
+            <Link scroll={false} className="reset-link" href={withParams('/', { ville: base.ville, date: base.date })}>
               Réinitialiser
             </Link>
           )}

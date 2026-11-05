@@ -42,7 +42,7 @@ export function TimeMenu({ label, shortLabel, presets, de, preciseHref, pill = f
       {open && (
         <div className="picker-menu menu-time" role="dialog" aria-label="Horaire">
           {presets.map((p) => (
-            <Link key={p.key} href={p.href} aria-selected={p.active} onClick={() => setOpen(false)}>
+            <Link scroll={false} key={p.key} href={p.href} aria-selected={p.active} onClick={() => setOpen(false)}>
               <span className="grow">{p.label}</span>
               <span className="small muted">{p.hint}</span>
               {p.active && <IconCheck size={16} />}
@@ -57,7 +57,7 @@ export function TimeMenu({ label, shortLabel, presets, de, preciseHref, pill = f
               onChange={(e) => {
                 const h = Number(e.target.value);
                 setOpen(false);
-                router.push(preciseHref.replace('__DE__', String(h)).replace('__A__', String(Math.min(24, h + 2))));
+                router.push(preciseHref.replace('__DE__', String(h)).replace('__A__', String(Math.min(24, h + 2))), { scroll: false });
               }}
             >
               <option value="" disabled>Choisir</option>
@@ -84,7 +84,7 @@ export function SortMenu({ options }: { options: { key: string; label: string; h
       {open && (
         <div className="picker-menu" role="listbox" aria-label="Trier">
           {options.map((o) => (
-            <Link key={o.key} role="option" href={o.href} aria-selected={o.active} onClick={() => setOpen(false)}>
+            <Link scroll={false} key={o.key} role="option" href={o.href} aria-selected={o.active} onClick={() => setOpen(false)}>
               <span className="grow">{o.label}</span>
               {o.active && <IconCheck size={16} />}
             </Link>
@@ -121,11 +121,11 @@ export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pick
       </button>
       {open && (
         <div className="picker-menu qmenu" role="dialog" aria-label="Jour">
-          <Link href={todayHref} aria-selected={isToday} onClick={() => setOpen(false)}>
+          <Link scroll={false} href={todayHref} aria-selected={isToday} onClick={() => setOpen(false)}>
             <span className="grow">Aujourd’hui</span>
             {isToday && <IconCheck size={16} />}
           </Link>
-          <Link href={tomorrowHref} aria-selected={isTomorrow} onClick={() => setOpen(false)}>
+          <Link scroll={false} href={tomorrowHref} aria-selected={isTomorrow} onClick={() => setOpen(false)}>
             <span className="grow">Demain</span>
             {isTomorrow && <IconCheck size={16} />}
           </Link>
@@ -144,7 +144,7 @@ export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pick
             onChange={(e) => {
               if (!e.target.value) return;
               setOpen(false);
-              router.push(pickHref.replace('__DATE__', e.target.value));
+              router.push(pickHref.replace('__DATE__', e.target.value), { scroll: false });
             }}
           />
         </div>
@@ -173,7 +173,7 @@ export function PeopleMenu({ n, hrefs, tool = false }: { n: number; hrefs: strin
           <span className="label">Combien de personnes ?</span>
           <div className="people-grid">
             {hrefs.map((href, i) => (
-              <Link key={href} href={href} aria-current={i + 1 === n ? 'true' : undefined} onClick={() => setOpen(false)}>
+              <Link scroll={false} key={href} href={href} aria-current={i + 1 === n ? 'true' : undefined} onClick={() => setOpen(false)}>
                 {i + 1}
               </Link>
             ))}

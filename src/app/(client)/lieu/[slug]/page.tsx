@@ -3,16 +3,16 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Deal, VenueArt } from '@/components/ui';
-import { IconBack, IconClock, IconMinus, IconPin, IconPlus, IconUsers, IconX } from '@/components/icons';
+import { IconBack, IconChevronRight, IconClock, IconMinus, IconPin, IconPlus, IconUsers, IconX } from '@/components/icons';
 import { getCurrentUser, getMyVenues } from '@/lib/auth';
 import { CATEGORIES } from '@/lib/categories';
-import { addDays, brusselsDate, brusselsHour, capitalize, dayChip, euros, longDate, timeLabel } from '@/lib/format';
+import { addDays, brusselsDate, brusselsHour, capitalize, dayChip, euros, isDateStr, longDate, timeLabel } from '@/lib/format';
 import { DAYS_AHEAD, MAX_DAYS, clientParams, withParams } from '@/lib/params';
 import { DatePicker } from '@/components/DatePicker';
 import { VenueMap } from '@/components/VenueMap';
 import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
 import { discounted, quote } from '@/lib/pricing';
-import { offersOf, photoList, unitsFor, venueBySlug, venueSlotsForDay, venueSlotsRange, type SlotView } from '@/lib/venues';
+import { offersOf, photoList, unitsFor, venueBySlug, venueSlotsRange, type SlotView } from '@/lib/venues';
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -35,15 +35,8 @@ export default async function VenuePage({ params, searchParams }: Props) {
     if (!user || (!user.isAdmin && !mine.some((m) => m.venue.id === venue.id))) notFound();
   }
 
-  // Les 14 prochains jours en une requête : la bande de dates montre où il reste de la place.
-  const RANGE = 14;
-  const inRange = p.date < addDays(p.today, RANGE);
-  const [photos, upcoming, offerMap, farSlots] = await Promise.all([
-    photoList(venue.id),
-    venueSlotsRange(venue.id, p.today, RANGE),
-    offersOf([venue.id]),
-    inRange ? Promise.resolve(null) : venueSlotsForDay(venue.id, p.date),
-  ]);
+  // Tous les jours réservables en une requête : la bande de dates montre où il reste de la place, semaine par semaine.
+  const [photos, upcoming, offerMap] = await Promise.all([photoList(venue.id), venueSlotsRange(venue.id, p.today, MAX_DAYS), offersOf([venue.id])]);
   const offerList = (offerMap.get(venue.id) ?? []).filter((o) => o.isActive);
   const byDay = new Map<string, SlotView[]>();
   for (const s of upcoming) {
@@ -52,7 +45,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
   }
   // Plus rien aujourd'hui (ou pas de date choisie) : on avance au prochain jour qui a des créneaux.
   if (!raw.date && !byDay.has(p.date) && upcoming.length > 0) p.date = brusselsDate(upcoming[0].startsAt);
-  const daySlots = farSlots ?? byDay.get(p.date) ?? [];
+  const daySlots = byDay.get(p.date) ?? [];
   // Plusieurs prestations : on en montre une à la fois (celle demandée, celle du créneau choisi, ou la première qui a des créneaux).
   const wanted = typeof raw.offre === 'string' ? raw.offre : undefined;
   const fromSlot = daySlots.find((s) => s.id === p.slot)?.offer.id;
@@ -73,11 +66,25 @@ export default async function VenuePage({ params, searchParams }: Props) {
     de: p.de,
     a: p.a,
     offre: offerList.length > 1 && offer ? offer.id : undefined,
+    du: undefined as string | undefined,
   };
   // Venu d'Explorer avec « Matin », « Après-midi » ou « Soir » : on garde le même moment ici.
   const range = p.hours ?? null;
   const shown = range ? slots.filter((s) => brusselsHour(s.startsAt) >= range.from && brusselsHour(s.startsAt) < range.to) : slots;
-  const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(p.today, i));
+  // Bande de 7 jours qui contient le jour choisi ; les flèches passent aux 7 jours d'avant ou d'après.
+  const lastDay = addDays(p.today, MAX_DAYS - 1);
+  // La dernière bande s'arrête au dernier jour réservable, toujours avec 7 jours.
+  const lastStart = addDays(lastDay, -(DAYS_AHEAD - 1));
+  const clampStart = (d: string) => (d > lastStart ? lastStart : d < p.today ? p.today : d);
+  const startFor = (d: string) => clampStart(addDays(p.today, Math.floor(Math.max(0, Math.round((Date.parse(d) - Date.parse(p.today)) / 86_400_000)) / DAYS_AHEAD) * DAYS_AHEAD));
+  // « du » garde la bande choisie avec les flèches tant que le jour sélectionné en fait partie.
+  const du = typeof raw.du === 'string' && isDateStr(raw.du) ? clampStart(raw.du) : null;
+  const start = du && p.date >= du && p.date <= addDays(du, DAYS_AHEAD - 1) ? du : startFor(p.date);
+  base.du = start !== startFor(p.date) ? start : undefined;
+  const windowOf = (from: string) => Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(from, i)).filter((d) => d <= lastDay);
+  const days = windowOf(start);
+  const prevStart = start > p.today ? clampStart(addDays(start, -DAYS_AHEAD)) : null;
+  const nextStart = start < lastStart ? clampStart(addDays(start, DAYS_AHEAD)) : null;
   const price = selected && offer ? quote(offer, n, selected.discountPct) : null;
   const cat = CATEGORIES[venue.category];
   const me = parsePos((await cookies()).get(POS_COOKIE)?.value);
@@ -90,6 +97,12 @@ export default async function VenuePage({ params, searchParams }: Props) {
     return { count: list.length, best: list.reduce((m, s) => Math.max(m, s.discountPct), 0) };
   };
   const nextFree = upcoming.find((s) => usable(s) && brusselsDate(s.startsAt) > p.date) ?? null;
+  // En changeant de semaine, on se place sur le premier jour qui a de la place.
+  const landOn = (from: string) => windowOf(from).find((d) => daySummary(d).count > 0) ?? from;
+  const weekHref = (from: string) => {
+    const d = landOn(from);
+    return withParams(`/lieu/${slug}`, base, { date: d === p.today ? undefined : d, du: startFor(d) === from ? undefined : from, slot: undefined });
+  };
   const firstFree = upcoming.find(usable) ?? null;
   const freeCount = shown.filter((s) => s.remaining >= need).length;
   const leftLabel = (s: SlotView) =>
@@ -188,26 +201,42 @@ export default async function VenuePage({ params, searchParams }: Props) {
             ))}
           </nav>
         )}
-        <nav className="days avail" aria-label="Choisir le jour">
-          {[...days, ...(days.includes(p.date) ? [] : [p.date])].map((d) => {
-            const c = dayChip(d, p.today);
-            const sum = daySummary(d);
-            return (
-              <Link
-                key={d}
-                className={`day${sum.count ? '' : ' none'}`}
-                href={withParams(`/lieu/${slug}`, base, { date: d === p.today ? undefined : d })}
-                aria-current={d === p.date ? 'true' : undefined}
-                aria-label={`${capitalize(longDate(d))} : ${sum.count ? `${sum.count} créneau${sum.count > 1 ? 'x' : ''} libre${sum.count > 1 ? 's' : ''}, jusqu’à −${sum.best} %` : 'complet ou fermé'}`}
-                scroll={false}
-              >
-                <span>{c.top}</span>
-                <b>{c.num}</b>
-                <em>{sum.count ? `−${sum.best} %` : '–'}</em>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="days-wrap">
+          {prevStart ? (
+            <Link className="days-arrow" href={weekHref(prevStart)} aria-label="7 jours précédents" scroll={false}>
+              <IconBack size={18} />
+            </Link>
+          ) : (
+            <span className="days-arrow" aria-disabled="true"><IconBack size={18} /></span>
+          )}
+          <nav className="days avail" aria-label="Choisir le jour">
+            {days.map((d) => {
+              const c = dayChip(d, p.today);
+              const sum = daySummary(d);
+              return (
+                <Link
+                  key={d}
+                  className={`day${sum.count ? '' : ' none'}`}
+                  href={withParams(`/lieu/${slug}`, base, { date: d === p.today ? undefined : d })}
+                  aria-current={d === p.date ? 'true' : undefined}
+                  aria-label={`${capitalize(longDate(d))} : ${sum.count ? `${sum.count} créneau${sum.count > 1 ? 'x' : ''} libre${sum.count > 1 ? 's' : ''}, jusqu’à −${sum.best} %` : 'complet ou fermé'}`}
+                  scroll={false}
+                >
+                  <span>{c.top}</span>
+                  <b>{c.num}</b>
+                  <em>{sum.count ? `−${sum.best} %` : '–'}</em>
+                </Link>
+              );
+            })}
+          </nav>
+          {nextStart ? (
+            <Link className="days-arrow" href={weekHref(nextStart)} aria-label="7 jours suivants" scroll={false}>
+              <IconChevronRight size={18} />
+            </Link>
+          ) : (
+            <span className="days-arrow" aria-disabled="true"><IconChevronRight size={18} /></span>
+          )}
+        </div>
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="label">Personnes</span>
           <div className="stepper">

@@ -127,6 +127,11 @@ try {
   await client.locator('.venue-card .venue-link').first().click();
   await client.waitForURL(/\/lieu\//);
   ok((await client.locator('.slot').count()) > 0, 'La fiche affiche des créneaux');
+  const firstWeek = await client.locator('.days.avail .day b').first().textContent();
+  await client.click('a.days-arrow[aria-label="7 jours suivants"]');
+  await client.waitForFunction((f) => document.querySelector('.days.avail .day b')?.textContent !== f, firstWeek);
+  ok((await client.locator('.days.avail .day').count()) === 7, 'Fiche : la flèche affiche les 7 jours suivants');
+  await client.goBack();
   await client.locator('.slot:not(.full)').first().click();
   await client.waitForSelector('.sticky-cta');
   ok(await client.locator('.sticky-cta a:has-text("Réserver")').isVisible(), 'Choisir un créneau affiche le prix et le bouton Réserver');

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 export function DatePicker({ value, min, max, hrefBase, label = 'Autre date', pill = false, active = false }: { value: string; min: string; max: string; hrefBase: string; label?: string; pill?: boolean; active?: boolean }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
-  const open = () => {
+  const open = (e: React.MouseEvent<HTMLButtonElement>) => {
     const el = input.current;
     if (!el) return;
     try {
@@ -15,6 +15,8 @@ export function DatePicker({ value, min, max, hrefBase, label = 'Autre date', pi
       el.focus();
       el.click();
     }
+    // Le calendrier natif rend le focus au bouton en se fermant : on évite l'anneau qui reste affiché.
+    e.currentTarget.blur();
   };
   return (
     <span className="datepick">

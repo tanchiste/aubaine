@@ -779,3 +779,11 @@ p { margin: 0; }
 .map-pop b { font-size: 14px; color: var(--ink); }
 .map-pop span { font-size: 12px; color: var(--muted); }
 .map-pop a { margin-top: 4px; font-size: 13px; font-weight: 700; color: var(--primary); }
+
+/* Fiche : flèches pour passer aux 7 jours suivants ou précédents */
+.days-wrap { display: flex; align-items: center; gap: 6px; }
+.days-wrap .days { flex: 1; min-width: 0; }
+.days-arrow { flex: none; width: 30px; height: 72px; border-radius: 12px; display: grid; place-items: center; background: var(--soft); border: 1px solid var(--line-2); color: var(--ink); text-decoration: none; }
+.days-arrow:hover { color: var(--primary); border-color: #C9C5DA; }
+.days-arrow[aria-disabled='true'] { color: #C9C5DA; background: transparent; }
+.day-cal:focus:not(:focus-visible), .days-arrow:focus:not(:focus-visible) { outline: none; }

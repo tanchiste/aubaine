@@ -16,6 +16,7 @@ export type SignupState = {
   error?: string;
   exists?: boolean;
   devCode?: string;
+  adminKey?: boolean;
 };
 
 const base = z.object({
@@ -49,7 +50,7 @@ export async function signupAction(prev: SignupState, form: FormData): Promise<S
     };
     const r = await requestLoginCode(d.email, payload);
     if (!r.ok) return { step: 'form', kind, values: data, error: r.error, exists: r.reason === 'exists' };
-    return { step: 'code', kind, values: data, email: d.email.trim().toLowerCase(), devCode: r.devCode };
+    return { step: 'code', kind, values: data, email: d.email.trim().toLowerCase(), devCode: r.devCode, adminKey: r.adminKey };
   }
 
   const email = String(form.get('email') ?? prev.email ?? '');

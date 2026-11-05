@@ -36,7 +36,7 @@ export function LoginForm({ next }: { next: string }) {
   return (
     <form action={action} className="stack" style={{ ['--gap' as string]: '14px' }}>
       <input type="hidden" name="next" value={next} />
-      <CodeStep email={state.email} devCode={state.devCode} error={state.error} pending={pending} cta="Me connecter" />
+      <CodeStep email={state.email} devCode={state.devCode} secret={state.adminKey} error={state.error} pending={pending} cta="Me connecter" />
     </form>
   );
 }

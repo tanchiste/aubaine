@@ -15,7 +15,7 @@ export function SignupForm({ kind, next }: { kind: 'client' | 'exploitant'; next
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="next" value={next} />
       {state.step === 'code' ? (
-        <CodeStep email={state.email} devCode={state.devCode} error={state.error} pending={pending} cta="Créer mon compte" />
+        <CodeStep email={state.email} devCode={state.devCode} secret={state.adminKey} error={state.error} pending={pending} cta="Créer mon compte" />
       ) : (
         <>
           <input type="hidden" name="intent" value="send" />

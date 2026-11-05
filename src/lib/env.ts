@@ -20,4 +20,13 @@ export const testMode = () => process.env.NODE_ENV !== 'production' || process.e
  * Le code du back-office ne s'affiche jamais à l'écran en ligne : sinon n'importe qui
  * connaissant l'email admin pourrait l'ouvrir. ADMIN_DEV_CODES=1 sert uniquement aux tests locaux.
  */
+/**
+ * Clé back-office (ADMIN_KEY, au moins 12 caractères) : permet à l'équipe Aubaine de se connecter
+ * sans service d'email. Elle remplace le code à 6 chiffres quand celui-ci ne peut ni s'afficher ni partir par email.
+ */
+export function adminKey(): string | null {
+  const k = (process.env.ADMIN_KEY ?? '').trim();
+  return k.length >= 12 ? k : null;
+}
+
 export const adminCodesOnScreen = () => process.env.NODE_ENV !== 'production' || process.env.ADMIN_DEV_CODES === '1';

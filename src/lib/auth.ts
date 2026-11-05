@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { loginCodes, sessions, users, venueMembers, venues, type AccountKind, type VenueCategory } from '@/db/schema';
 import { loginCodeMail, sendMail } from './email';
-import { adminCodesOnScreen, adminEmails, isAdminEmail, testMode } from './env';
+import { adminCodesOnScreen, adminEmails, adminKey, isAdminEmail, testMode } from './env';
 
 const SESSION_COOKIE = 'aub_session';
 const SESSION_DAYS = 30;
@@ -42,7 +42,14 @@ export const emailSchema = z.string().trim().toLowerCase().pipe(z.email({ messag
 export const showDevCode = testMode;
 export { adminEmails, isAdminEmail };
 
-type Result = { ok: true; devCode?: string } | { ok: false; error: string; reason?: 'no_account' | 'exists' };
+type Result = { ok: true; devCode?: string; adminKey?: boolean } | { ok: false; error: string; reason?: 'no_account' | 'exists' };
+
+/** Le code s'affiche à l'écran en phase de test, sauf pour l'équipe Aubaine en ligne */
+const codeOnScreen = (admin: boolean) => testMode() && (!admin || adminCodesOnScreen());
+
+/** Connexion admin avec la clé back-office : ni code à l'écran, ni service d'email configuré */
+const usesAdminKey = (email: string) =>
+  isAdminEmail(email) && !codeOnScreen(true) && !process.env.RESEND_API_KEY && adminKey() !== null;
 
 /**
  * Envoie un code à 6 chiffres.
@@ -57,10 +64,10 @@ export async function requestLoginCode(rawEmail: string, signup?: SignupPayload)
   if (signup && existing) return { ok: false, error: 'Un compte existe déjà avec cet email.', reason: 'exists' };
   const admin = isAdminEmail(email);
   if (!signup && !existing && !admin) return { ok: false, error: 'Aucun compte avec cet email.', reason: 'no_account' };
-  // En phase de test, le code s'affiche à l'écran, sauf pour l'équipe Aubaine en ligne : il part par email.
-  const onScreen = testMode() && (!admin || adminCodesOnScreen());
-  if (admin && !onScreen && !process.env.RESEND_API_KEY)
-    return { ok: false, error: 'Le code du back-office part par email : ajoute la clé RESEND_API_KEY dans Vercel.' };
+  const onScreen = codeOnScreen(admin);
+  const keyMode = usesAdminKey(email);
+  if (admin && !onScreen && !keyMode && !process.env.RESEND_API_KEY)
+    return { ok: false, error: 'Accès au back-office : ajoute ADMIN_KEY (12 caractères minimum) dans Vercel, ou RESEND_API_KEY.' };
 
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -75,12 +82,14 @@ export async function requestLoginCode(rawEmail: string, signup?: SignupPayload)
     payload: signup ?? null,
     expiresAt: new Date(Date.now() + CODE_TTL_MIN * 60_000),
   });
-  try {
-    await sendMail(loginCodeMail(email, code));
-  } catch {
-    return { ok: false, error: "L'email n'a pas pu être envoyé. Réessaie dans un instant." };
+  if (!keyMode) {
+    try {
+      await sendMail(loginCodeMail(email, code));
+    } catch {
+      return { ok: false, error: "L'email n'a pas pu être envoyé. Réessaie dans un instant." };
+    }
   }
-  return { ok: true, devCode: onScreen ? code : undefined };
+  return { ok: true, devCode: onScreen ? code : undefined, adminKey: keyMode || undefined };
 }
 
 export type VerifyResult =
@@ -89,9 +98,11 @@ export type VerifyResult =
 
 export async function verifyLoginCode(rawEmail: string, rawCode: string): Promise<VerifyResult> {
   const parsed = emailSchema.safeParse(rawEmail);
-  const code = rawCode.replace(/\D/g, '');
-  if (!parsed.success || code.length !== 6) return { ok: false, error: 'Code incorrect.' };
+  if (!parsed.success) return { ok: false, error: 'Code incorrect.' };
   const email = parsed.data;
+  const keyMode = usesAdminKey(email);
+  const code = keyMode ? rawCode.trim() : rawCode.replace(/\D/g, '');
+  if (!code || (!keyMode && code.length !== 6)) return { ok: false, error: keyMode ? 'Clé incorrecte.' : 'Code incorrect.' };
 
   const [row] = await db
     .select()
@@ -101,11 +112,12 @@ export async function verifyLoginCode(rawEmail: string, rawCode: string): Promis
     .limit(1);
   if (!row || row.attempts >= MAX_ATTEMPTS) return { ok: false, error: 'Code expiré. Demande un nouveau code.' };
 
-  const a = Buffer.from(row.codeHash, 'hex');
-  const b = Buffer.from(codeHash(email, code), 'hex');
+  // Avec la clé back-office, on compare la clé saisie à ADMIN_KEY ; sinon le code au hash enregistré.
+  const a = Buffer.from(keyMode ? sha256(adminKey()!) : row.codeHash, 'hex');
+  const b = Buffer.from(keyMode ? sha256(code) : codeHash(email, code), 'hex');
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     await db.update(loginCodes).set({ attempts: row.attempts + 1 }).where(eq(loginCodes.id, row.id));
-    return { ok: false, error: 'Code incorrect.' };
+    return { ok: false, error: keyMode ? 'Clé incorrecte.' : 'Code incorrect.' };
   }
   await db.update(loginCodes).set({ usedAt: new Date() }).where(eq(loginCodes.id, row.id));
 

@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation';
 import { isAdminEmail, requestLoginCode, verifyLoginCode } from '@/lib/auth';
 
-export type LoginState = { step: 'email' | 'code'; email?: string; error?: string; noAccount?: boolean; devCode?: string; next?: string };
+export type LoginState = { step: 'email' | 'code'; email?: string; error?: string; noAccount?: boolean; devCode?: string; adminKey?: boolean; next?: string };
 
 /** N'accepte que les redirections internes à l'app */
 export async function safeNext(v: FormDataEntryValue | null | undefined): Promise<string> {
@@ -27,7 +27,7 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
     const email = String(form.get('email') ?? '');
     const r = await requestLoginCode(email);
     if (!r.ok) return { step: 'email', email, error: r.error, noAccount: r.reason === 'no_account', next };
-    return { step: 'code', email: email.trim().toLowerCase(), devCode: r.devCode, next };
+    return { step: 'code', email: email.trim().toLowerCase(), devCode: r.devCode, adminKey: r.adminKey, next };
   }
 
   const email = String(form.get('email') ?? prev.email ?? '');

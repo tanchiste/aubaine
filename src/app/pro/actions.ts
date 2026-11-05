@@ -9,6 +9,7 @@ import { bookings, offers, slots, venueEvents, venueMembers, venuePhotos, venues
 import { adminEmails, getMyVenues, requireUser } from '@/lib/auth';
 import { CATEGORY_KEYS, VENUE_COLORS } from '@/lib/categories';
 import { sendMail } from '@/lib/email';
+import { geocode } from '@/lib/geo';
 import { MAX_DISCOUNT, MIN_DISCOUNT } from '@/lib/pricing';
 import { VENUE_COOKIE, createDraftVenue } from '@/lib/pro';
 import { checklist, isReady, offersOf } from '@/lib/venues';
@@ -101,11 +102,16 @@ export async function saveVenueAction(_prev: FormState, form: FormData): Promise
     if (venue.status === 'rejected') return { error: 'Cette fiche a été refusée : contacte-nous pour en discuter.' };
     const parsed = venueSchema.safeParse(Object.fromEntries(form));
     if (!parsed.success) return { error: parsed.error.issues[0].message };
+    // Position sur la carte : recalculée quand l'adresse ou la commune change.
+    const d = parsed.data;
+    const moved = d.address !== venue.address || d.city !== venue.city || venue.lat === null;
+    const pos = moved && d.address ? await geocode(d.address, d.city) : null;
     await db
       .update(venues)
-      .set({ ...parsed.data, updatedAt: new Date() })
+      .set({ ...d, ...(moved ? { lat: pos?.lat ?? null, lng: pos?.lng ?? null } : {}), updatedAt: new Date() })
       .where(eq(venues.id, venue.id));
     revalidatePath('/pro', 'layout');
+    if (moved && d.address && !pos) return { ok: true, message: 'Fiche enregistrée. Adresse introuvable sur la carte : vérifie la rue et le numéro.' };
     return { ok: true, message: 'Fiche enregistrée.' };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Erreur inattendue.' };

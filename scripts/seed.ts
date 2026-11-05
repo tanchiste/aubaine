@@ -110,6 +110,19 @@ const DEMOS: Demo[] = [
  * Téléchargées au moment du seed (build Vercel) et stockées comme les photos envoyées par les exploitants.
  * Sans réseau, la démo garde simplement ses pictogrammes.
  */
+/** Position approximative de chaque lieu de démo (adresses fictives, quartiers réels) */
+const POS: Record<string, [number, number]> = {
+  kartohm: [50.4527, 3.8862],
+  'le-cachot': [50.4547, 3.9512],
+  'nebula-vr': [50.4626, 3.9668],
+  'arena-laser-borinage': [50.4889, 3.9055],
+  'strike-7000': [50.4561, 3.9715],
+  'bulle-d-o': [50.4786, 4.1857],
+  'hache-et-cie': [50.4113, 4.4445],
+  'cle-de-voute': [50.4571, 3.9541],
+  'laser-spot': [50.4076, 3.8949],
+};
+
 const PHOTOS: Record<string, string[]> = {
   kartohm: ['1505570554449-69ce7d4fa36b', '1640084347692-e8f6b84caa7c', '1578401449027-acdcfd8137e9'],
   'le-cachot': ['1514820402329-de527fdd2e6d', '1696013910376-c56f76dd8178', '1523485474951-78fcd9344f0c'],
@@ -162,10 +175,10 @@ async function main() {
     for (const d of DEMOS) {
       const status = d.status ?? 'published';
       const [v] = await tx`
-        insert into venues (slug, name, category, city, area, address, description, duration_min, group_min, group_max,
+        insert into venues (slug, name, category, city, area, address, lat, lng, description, duration_min, group_min, group_max,
           capacity, capacity_unit, price_cents, price_unit, base_discount_pct, color, status, is_demo,
           submitted_at, published_at)
-        values (${d.slug}, ${d.name}, ${d.category}, ${d.city}, ${d.area}, ${d.address}, ${d.description},
+        values (${d.slug}, ${d.name}, ${d.category}, ${d.city}, ${d.area}, ${d.address}, ${POS[d.slug]?.[0] ?? null}, ${POS[d.slug]?.[1] ?? null}, ${d.description},
           ${d.durationMin}, ${d.groupMin}, ${d.groupMax}, ${d.capacity}, ${d.capacityUnit}, ${d.price * 100},
           ${d.priceUnit}, ${d.discount}, ${d.color}, ${status}, true,
           now() - interval '3 hours', ${status === 'published' ? sql`now() - interval '30 days'` : null})

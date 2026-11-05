@@ -6,25 +6,36 @@ import { Deal, Logo, VenueArt } from '@/components/ui';
 import { HeroDial } from '@/components/brand';
 import { IconBolt, IconChevronRight, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
+import { VenueMap, type MapPin } from '@/components/VenueMap';
 import { DateMenu, PeopleMenu, SortMenu, TimeMenu } from '@/components/Menus';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
+import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
+import type { Venue } from '@/db/schema';
 import { bestDeals, cities, explorer, lastMinute, minPrice, searchVenues } from '@/lib/venues';
 
 type SP = Record<string, string | string[] | undefined>;
 
 export default async function ExplorerPage({ searchParams }: { searchParams: Promise<SP> }) {
   const raw = await searchParams;
-  const saved = (await cookies()).get(CITY_COOKIE)?.value;
+  const jar = await cookies();
+  const saved = jar.get(CITY_COOKIE)?.value;
   const p = clientParams(raw, saved ? decodeURIComponent(saved) : undefined);
-  const { today, n, category, q, moment, hours, sort, city } = p;
+  const { today, n, category, q, moment, hours, city } = p;
   const filters = { people: n, category, q, city };
+  // Position partagée par le navigateur (« Autour de moi ») : distances et tri par proximité.
+  const pos = parsePos(jar.get(POS_COOKIE)?.value);
+  const near = p.near && !!pos;
+  const defaultSort: Sort = near ? 'proche' : 'remise';
+  const sort: Sort = p.sort === 'proche' && !pos ? 'remise' : raw.tri ? p.sort : defaultSort;
+  const kmTo = (v: Venue) => (pos && hasPos(v) ? distanceKm(pos, v) : null);
+  const mapView = raw.vue === 'carte';
 
   let date = p.date;
   const [first, lm, deals, cityList] = await Promise.all([
-    explorer({ ...filters, date, hours, sort }),
+    explorer({ ...filters, date, hours, sort, from: pos }),
     date === today && !category && !q && !hours ? lastMinute(today, n, city) : Promise.resolve([]),
     q ? Promise.resolve([]) : bestDeals({ ...filters, today, hours }),
     cities(),
@@ -34,7 +45,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
   let items = first;
   let rolled = false;
   if (items.length === 0 && date === today && !raw.date) {
-    const next = await explorer({ ...filters, date: addDays(today, 1), hours, sort });
+    const next = await explorer({ ...filters, date: addDays(today, 1), hours, sort, from: pos });
     if (next.length > 0) {
       items = next;
       date = addDays(today, 1);
@@ -53,10 +64,11 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     moment,
     de: p.de,
     a: p.a,
-    tri: sort !== 'remise' ? sort : undefined,
-    ville: city ?? (raw.ville === 'tout' ? 'tout' : undefined),
+    tri: sort !== defaultSort ? sort : undefined,
+    ville: near ? 'proche' : (city ?? (raw.ville === 'tout' ? 'tout' : undefined)),
+    vue: mapView ? 'carte' : undefined,
   };
-  const anyFilter = !!(category || q || hours || n !== 2 || sort !== 'remise');
+  const anyFilter = !!(category || q || hours || n !== 2 || sort !== defaultSort);
 
   // Rien trouvé : on teste ce qui donnerait des résultats en relâchant un filtre à la fois.
   const fixes: { key: string; label: string; href: string; n: number }[] = [];
@@ -114,20 +126,33 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               ];
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(today, i));
   const extraDay = !days.includes(date) ? date : null;
-  const hrefFor: Record<string, string> = { tout: withParams('/', base, { ville: 'tout' }) };
+  const hrefFor: Record<string, string> = { tout: withParams('/', base, { ville: 'tout', tri: undefined }), proche: withParams('/', base, { ville: 'proche', tri: undefined }) };
   for (const c of cityList) hrefFor[c.city] = withParams('/', base, { ville: c.city });
   const place = city ?? 'du Hainaut';
+  const where = near ? 'autour de toi' : city ? `de ${place}` : place;
+  const pins: MapPin[] = items.filter((i) => hasPos(i.venue)).map(({ venue, slots }) => {
+    const km = kmTo(venue);
+    return {
+      id: venue.id,
+      lat: venue.lat!,
+      lng: venue.lng!,
+      name: venue.name,
+      pct: Math.max(...slots.map((s) => s.discountPct)),
+      line: [`dès ${euros(minPrice(slots))}`, `${slots.length} créneau${slots.length > 1 ? 'x' : ''}`, km !== null ? distanceLabel(km) : venue.city].join(' · '),
+      href: withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined) }),
+    };
+  });
 
   return (
     <div className="explore">
       <header className="hero-band">
         <div className="hero-top">
           <span className="only-mobile"><Logo dark /></span>
-          <CityPicker cities={cityList} current={city} hrefFor={hrefFor} />
+          <CityPicker cities={cityList} current={city} near={near} hasPos={!!pos} hrefFor={hrefFor} />
         </div>
         <div className="hero-copy">
           <h1 className="display explore-title">
-            Les loisirs {city ? `de ${place}` : place},
+            Les loisirs {where},
             <br />à prix creux.
           </h1>
           <p className="hero-live">{live}</p>
@@ -247,7 +272,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                   <span className="deal-body">
                     <b className="deal-name">{venue.name}</b>
                     <span className="small muted">
-                      {relativeDay(d, today)} · {timeLabel(slot.startsAt)} · {venue.city}
+                      {relativeDay(d, today)} · {timeLabel(slot.startsAt)} · {kmTo(venue) !== null ? `à ${distanceLabel(kmTo(venue)!)}` : venue.city}
                     </span>
                     <span className="row" style={{ ['--gap' as string]: '6px', marginTop: 2 }}>
                       <b className="num" style={{ fontSize: 16 }}>{euros(unit)}</b>
@@ -293,9 +318,17 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               {items.length} lieu{items.length > 1 ? 'x' : ''}
             </span>
           </h2>
-          <SortMenu
-            options={(Object.keys(SORTS) as Sort[]).map((k) => ({ key: k, label: SORTS[k], href: withParams('/', base, { tri: k === 'remise' ? undefined : k }), active: sort === k }))}
-          />
+          <div className="row" style={{ ['--gap' as string]: '10px' }}>
+            <nav className="view-toggle" aria-label="Affichage">
+              <Link scroll={false} href={withParams('/', base, { vue: undefined })} aria-current={!mapView ? 'true' : undefined}>Liste</Link>
+              <Link scroll={false} href={withParams('/', base, { vue: 'carte' })} aria-current={mapView ? 'true' : undefined}>Carte</Link>
+            </nav>
+            <SortMenu
+              options={(Object.keys(SORTS) as Sort[])
+                .filter((k) => k !== 'proche' || pos)
+                .map((k) => ({ key: k, label: SORTS[k], href: withParams('/', base, { tri: k === defaultSort ? undefined : k }), active: sort === k }))}
+            />
+          </div>
         </div>
         {rolled && <p className="notice notice-primary small">Plus de créneau creux aujourd’hui : voici ceux de demain.</p>}
 
@@ -319,6 +352,11 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               <p className="small">Aucun créneau ne correspond pour l’instant. De nouveaux lieux arrivent chaque semaine.</p>
             )}
           </div>
+        ) : mapView ? (
+          <div className="map-wrap">
+            <VenueMap pins={pins} me={pos} />
+            {pins.length < items.length && <p className="small muted">{items.length - pins.length} lieu{items.length - pins.length > 1 ? 'x' : ''} pas encore placé{items.length - pins.length > 1 ? 's' : ''} sur la carte.</p>}
+          </div>
         ) : (
           <div className="venue-grid">
             {items.map(({ venue, photoId, slots }) => {
@@ -341,6 +379,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                           <span className="small muted">
                             {venue.area ? `${venue.area}, ` : ''}
                             {venue.city}
+                            {kmTo(venue) !== null && <b className="km"> · {distanceLabel(kmTo(venue)!)}</b>}
                           </span>
                         </div>
                         <div style={{ textAlign: 'right' }}>

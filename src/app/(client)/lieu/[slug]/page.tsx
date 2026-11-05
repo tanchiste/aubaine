@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Deal, VenueArt } from '@/components/ui';
@@ -8,6 +9,8 @@ import { CATEGORIES } from '@/lib/categories';
 import { addDays, brusselsDate, brusselsHour, capitalize, dayChip, euros, longDate, timeLabel } from '@/lib/format';
 import { DAYS_AHEAD, MAX_DAYS, clientParams, withParams } from '@/lib/params';
 import { DatePicker } from '@/components/DatePicker';
+import { VenueMap } from '@/components/VenueMap';
+import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
 import { discounted, quote } from '@/lib/pricing';
 import { offersOf, photoList, unitsFor, venueBySlug, venueSlotsForDay, venueSlotsRange, type SlotView } from '@/lib/venues';
 
@@ -77,6 +80,9 @@ export default async function VenuePage({ params, searchParams }: Props) {
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(p.today, i));
   const price = selected && offer ? quote(offer, n, selected.discountPct) : null;
   const cat = CATEGORIES[venue.category];
+  const me = parsePos((await cookies()).get(POS_COOKIE)?.value);
+  const located = hasPos(venue) ? { lat: venue.lat!, lng: venue.lng! } : null;
+  const km = me && located ? distanceKm(me, located) : null;
   // Ce qui est réservable pour cette prestation et ce groupe, jour par jour
   const usable = (s: SlotView) => (!offer || s.offer.id === offer.id) && s.remaining >= need && n >= s.offer.groupMin && n <= s.offer.groupMax;
   const daySummary = (d: string) => {
@@ -136,6 +142,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
               <span className="fact">{euros(offer.priceCents)} {offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}</span>
             </>
           )}
+          {km !== null && <span className="fact"><IconPin size={16} /> à {distanceLabel(km)}</span>}
         </div>
         {firstFree && (
           <a className="next-free" href="#creneaux">
@@ -151,6 +158,14 @@ export default async function VenuePage({ params, searchParams }: Props) {
           <a className="row small" style={{ ['--gap' as string]: '6px', fontWeight: 600 }} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`} target="_blank" rel="noreferrer">
             <IconPin size={16} /> {venue.address}
           </a>
+        )}
+        {located && (
+          <div className="map-card">
+            <VenueMap single className="mini" me={me} pins={[{ id: venue.id, lat: located.lat, lng: located.lng, name: venue.name, pct: firstFree?.discountPct ?? venue.baseDiscountPct, line: '', href: '#creneaux' }]} />
+            <a className="btn btn-sm" href={`https://www.google.com/maps/dir/?api=1&destination=${located.lat},${located.lng}`} target="_blank" rel="noreferrer">
+              Itinéraire{km !== null ? ` · ${distanceLabel(km)}` : ''}
+            </a>
+          </div>
         )}
       </div>
       </div>

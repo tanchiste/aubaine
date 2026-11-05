@@ -7,6 +7,7 @@ import { db } from '@/db';
 import { users, venueEvents, venueMembers, venuePhotos, venues } from '@/db/schema';
 import { requireAdmin } from '@/lib/auth';
 import { sendMail } from '@/lib/email';
+import { geocode } from '@/lib/geo';
 import { checklist, isReady, offersOf } from '@/lib/venues';
 
 export type AdminState = { ok?: boolean; error?: string; message?: string };
@@ -36,7 +37,12 @@ export async function reviewAction(_prev: AdminState, form: FormData): Promise<A
       const photos = await db.select({ id: venuePhotos.id }).from(venuePhotos).where(eq(venuePhotos.venueId, v.id));
       const offerList = (await offersOf([v.id])).get(v.id) ?? [];
       if (!isReady(checklist(v, photos.length, offerList))) return { error: 'La checklist n’est pas complète.' };
-      await db.update(venues).set({ status: 'published', publishedAt: new Date(), reviewMessage: null, updatedAt: new Date() }).where(eq(venues.id, v.id));
+      // Pas encore de position (fiche créée avant la carte) : on la cherche à la mise en ligne.
+      const pos = v.lat === null ? await geocode(v.address, v.city) : null;
+      await db
+        .update(venues)
+        .set({ status: 'published', publishedAt: new Date(), reviewMessage: null, updatedAt: new Date(), ...(pos ? { lat: pos.lat, lng: pos.lng } : {}) })
+        .where(eq(venues.id, v.id));
       await db.insert(venueEvents).values({ venueId: v.id, actorId: admin.id, action: 'approved', message: message || null });
       await notifyOwners(v.id, `${v.name} est en ligne sur Aubaine`, `Bonne nouvelle : ta fiche ${v.name} est en ligne.${message ? `\n\n${message}` : ''}\n\n${app}/pro`);
     } else if (decision === 'changes' || decision === 'reject') {

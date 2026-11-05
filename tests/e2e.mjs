@@ -132,6 +132,23 @@ try {
   ok(await client.locator('.sticky-cta a:has-text("Réserver")').isVisible(), 'Choisir un créneau affiche le prix et le bouton Réserver');
   await shot(client, '02-fiche');
 
+  // Autour de moi : position du navigateur, distances, tri par proximité et carte
+  const gctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, geolocation: { latitude: 50.4542, longitude: 3.9567 }, permissions: ['geolocation'] });
+  const geo = await gctx.newPage();
+  await geo.goto(`${BASE}/?ville=tout`);
+  await geo.click('.picker-btn');
+  await geo.click('.picker-near');
+  await geo.waitForURL((u) => u.searchParams.get('ville') === 'proche');
+  const kms = (await geo.locator('.venue-card .km').allTextContents()).map((t) => {
+    const m = t.match(/([\d,]+)\s*(k?m)/);
+    return m ? Number(m[1].replace(',', '.')) * (m[2] === 'm' ? 0.001 : 1) : NaN;
+  });
+  ok(kms.length > 0 && kms.every((k, i) => i === 0 || k >= kms[i - 1]), `Autour de moi : distances affichées et triées (${kms.length} lieux)`);
+  await geo.click('.view-toggle a:has-text("Carte")');
+  await geo.waitForSelector('.map-pin');
+  ok((await geo.locator('.map-pin').count()) > 0, 'Vue Carte : une épingle par lieu, avec sa remise');
+  await gctx.close();
+
   // 2. Exploitant : inscription et fiche
   const pctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const partner = await pctx.newPage();

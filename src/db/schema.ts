@@ -1,6 +1,7 @@
 import {
   boolean,
   customType,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -115,6 +116,9 @@ export const venues = pgTable(
     city: text('city').notNull().default('Mons'),
     area: text('area'),
     address: text('address'),
+    /** Position sur la carte (géocodée depuis l'adresse) */
+    lat: doublePrecision('lat'),
+    lng: doublePrecision('lng'),
     description: text('description'),
     durationMin: integer('duration_min').notNull().default(60),
     groupMin: integer('group_min').notNull().default(1),

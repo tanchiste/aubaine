@@ -6,6 +6,7 @@ import { MAX_DISCOUNT, MIN_DISCOUNT, discounted } from './pricing';
 import { addDays, brusselsHour } from './format';
 import type { HourRange, Sort } from './params';
 import { matchVenue } from './search';
+import { distanceKm, hasPos, type LatLng } from './geo';
 
 /** Ce qu'un créneau vend : la prestation (nom, durée, prix, groupe, capacité) */
 export type OfferLite = Pick<Offer, 'id' | 'name' | 'durationMin' | 'groupMin' | 'groupMax' | 'capacityUnit' | 'priceCents' | 'priceUnit'>;
@@ -146,7 +147,7 @@ export async function searchVenues(q: string, opts: { people?: number; city?: st
 /** Prix le plus bas parmi des créneaux (par personne ou la séance, selon la prestation) */
 export const minPrice = (slots: SlotView[]) => Math.min(...slots.map((s) => discounted(s.offer.priceCents, s.discountPct)));
 
-export async function explorer(opts: Filters & { date: string; hours?: HourRange; sort?: Sort }) {
+export async function explorer(opts: Filters & { date: string; hours?: HourRange; sort?: Sort; from?: LatLng | null }) {
   const fit = await publishedVenues(opts);
   const [rows, photos] = await Promise.all([
     slotsForDay(
@@ -174,7 +175,10 @@ export async function explorer(opts: Filters & { date: string; hours?: HourRange
     .filter((v) => byVenue.has(v.id))
     .map((v) => ({ venue: v, photoId: photos.get(v.id) ?? null, slots: byVenue.get(v.id)! }));
   const sort = opts.sort ?? 'remise';
+  const from = opts.from ?? null;
+  const km = (v: Venue) => (from && hasPos(v) ? distanceKm(from, v) : Infinity);
   items.sort((a, b) => {
+    if (sort === 'proche' && from) return km(a.venue) - km(b.venue);
     if (sort === 'heure') return a.slots[0].startsAt.getTime() - b.slots[0].startsAt.getTime();
     if (sort === 'prix') return minPrice(a.slots) - minPrice(b.slots);
     return Math.max(...b.slots.map((s) => s.discountPct)) - Math.max(...a.slots.map((s) => s.discountPct));

@@ -23,7 +23,7 @@ export type Moment = keyof typeof MOMENTS;
 export type HourRange = { from: number; to: number; label: string };
 export const hourLabel = (from: number, to: number) => (to - from === 1 ? `${from} h à ${to} h` : `${from} h – ${to} h`);
 
-export const SORTS = { remise: 'Meilleure remise', heure: 'Plus tôt', prix: 'Moins cher' } as const;
+export const SORTS = { remise: 'Meilleure remise', heure: 'Plus tôt', prix: 'Moins cher', proche: 'Plus proche' } as const;
 export type Sort = keyof typeof SORTS;
 
 /** Lit et borne les paramètres d'URL de l'app client */
@@ -42,12 +42,15 @@ export function clientParams(raw: Raw, savedCity?: string) {
   const custom = Number.isInteger(de) && Number.isInteger(a) && de >= 0 && a <= 24 && de < a ? { from: de, to: a, label: hourLabel(de, a) } : undefined;
   const moment: Moment | undefined = !custom && m && m in MOMENTS ? (m as Moment) : undefined;
   const hours: HourRange | undefined = custom ?? (moment ? { ...MOMENTS[moment] } : undefined);
-  const t = one(raw.tri);
-  const sort: Sort = t && t in SORTS ? (t as Sort) : 'remise';
-  // « tout » = tout le Hainaut ; sans paramètre, on reprend la dernière ville choisie.
+  // « tout » = tout le Hainaut, « proche » = autour de ma position ; sans paramètre, on reprend le dernier choix.
   const v = (one(raw.ville) ?? savedCity)?.trim().slice(0, 40);
-  const city = !v || v === 'tout' ? undefined : v;
-  return { today, date, n, category, q, slot, moment, de: custom?.from, a: custom?.to, hours, sort, city };
+  const near = v === 'proche';
+  const city = !v || v === 'tout' || near ? undefined : v;
+  // Autour de moi, le tri par défaut est la distance.
+  const defaultSort: Sort = near ? 'proche' : 'remise';
+  const t = one(raw.tri);
+  const sort: Sort = t && t in SORTS ? (t as Sort) : defaultSort;
+  return { today, date, n, category, q, slot, moment, de: custom?.from, a: custom?.to, hours, sort, defaultSort, city, near };
 }
 
 /** Construit une URL en gardant les paramètres utiles et en remplaçant ceux donnés */

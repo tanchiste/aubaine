@@ -29,6 +29,13 @@
       "when": 1793839130848,
       "tag": "0003_prestations",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793880829491,
+      "tag": "0004_localisation",
+      "breakpoints": true
     }
   ]
 }

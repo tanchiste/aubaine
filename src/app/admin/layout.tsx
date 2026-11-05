@@ -20,7 +20,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span className="admin-tab" aria-disabled="true" title="Bientôt" style={{ opacity: 0.5 }}>Activité</span>
           <span className="admin-tab" aria-disabled="true" title="Bientôt" style={{ opacity: 0.5 }}>Support</span>
         </nav>
-        <span className="small" style={{ marginLeft: 'auto', color: '#C9C5E6', whiteSpace: 'nowrap' }}>{admin.firstName ?? admin.email}</span>
+        <span className="row small" style={{ marginLeft: 'auto', ['--gap' as string]: '16px', color: '#C9C5E6', whiteSpace: 'nowrap' }}>
+          <a href="/" style={{ color: '#C9C5E6', fontWeight: 600 }}>Voir l’app</a>
+          {admin.firstName ?? admin.email}
+        </span>
       </header>
       {children}
     </div>

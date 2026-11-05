@@ -1,5 +1,5 @@
 // Parcours complet : un exploitant inscrit sa fiche, l'admin la valide, un client la voit.
-// Usage : BASE=http://localhost:3000 node tests/e2e.mjs   (base locale avec ADMIN_EMAILS=admin@aubaine.test)
+// Usage : AUTH_DEV_CODES=1 ADMIN_DEV_CODES=1 npx next start, puis BASE=http://localhost:3000 node tests/e2e.mjs   (base locale avec ADMIN_EMAILS=admin@aubaine.test)
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -115,7 +115,10 @@ try {
   await client.click('.qmenu a:has-text("Demain")');
   await client.waitForURL((u) => !!u.searchParams.get('date'));
   ok((await client.locator('.quickbar').textContent()).includes('Demain') && (await client.locator('.quickbar').textContent()).includes('Soir'), 'Pastilles : 3 personnes, soir et demain appliqués et affichés');
-  await client.goto(`${BASE}/lieu/bulle-d-o?moment=matin`);
+  // Prochain jour de semaine (les créneaux du matin d'aujourd'hui sont peut-être déjà passés)
+  let wd = new Date(Date.now() + 86_400_000);
+  while ([0, 6].includes(wd.getUTCDay())) wd = new Date(wd.getTime() + 86_400_000);
+  await client.goto(`${BASE}/lieu/bulle-d-o?moment=matin&date=${wd.toISOString().slice(0, 10)}`);
   const ficheHours = (await client.locator('.slot b').allTextContents()).map((t) => Number(t.slice(0, 2)));
   ok(ficheHours.length > 0 && ficheHours.every((h) => h < 12), 'La fiche garde le filtre « matin » (et propose toute la journée)');
   await client.goto(BASE + '/?q=' + encodeURIComponent('spa'));

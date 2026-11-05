@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { loginCodes, sessions, users, venueMembers, venues, type AccountKind, type VenueCategory } from '@/db/schema';
 import { loginCodeMail, sendMail } from './email';
+import { adminCodesOnScreen, adminEmails, isAdminEmail, testMode } from './env';
 
 const SESSION_COOKIE = 'aub_session';
 const SESSION_DAYS = 30;
@@ -37,20 +38,9 @@ const codeHash = (email: string, code: string) =>
 
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email({ message: 'Adresse email invalide.' }));
 
-/**
- * Sans service d'email (développement, tests, phase de test en ligne), le code est affiché à l'écran.
- * En production, il faut le demander explicitement avec AUTH_DEV_CODES=1 : n'importe qui peut alors
- * se connecter avec n'importe quel email, donc à réserver à une adresse qui n'est pas encore partagée.
- */
-export const showDevCode = () =>
-  !process.env.RESEND_API_KEY && (process.env.NODE_ENV !== 'production' || process.env.AUTH_DEV_CODES === '1');
-
-export function adminEmails(): string[] {
-  return (process.env.ADMIN_EMAILS ?? '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
+/** Phase de test : sert aussi à afficher le bandeau « Version de test » */
+export const showDevCode = testMode;
+export { adminEmails, isAdminEmail };
 
 type Result = { ok: true; devCode?: string } | { ok: false; error: string; reason?: 'no_account' | 'exists' };
 
@@ -65,8 +55,12 @@ export async function requestLoginCode(rawEmail: string, signup?: SignupPayload)
 
   const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
   if (signup && existing) return { ok: false, error: 'Un compte existe déjà avec cet email.', reason: 'exists' };
-  if (!signup && !existing && !adminEmails().includes(email))
-    return { ok: false, error: 'Aucun compte avec cet email.', reason: 'no_account' };
+  const admin = isAdminEmail(email);
+  if (!signup && !existing && !admin) return { ok: false, error: 'Aucun compte avec cet email.', reason: 'no_account' };
+  // En phase de test, le code s'affiche à l'écran, sauf pour l'équipe Aubaine en ligne : il part par email.
+  const onScreen = testMode() && (!admin || adminCodesOnScreen());
+  if (admin && !onScreen && !process.env.RESEND_API_KEY)
+    return { ok: false, error: 'Le code du back-office part par email : ajoute la clé RESEND_API_KEY dans Vercel.' };
 
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -86,7 +80,7 @@ export async function requestLoginCode(rawEmail: string, signup?: SignupPayload)
   } catch {
     return { ok: false, error: "L'email n'a pas pu être envoyé. Réessaie dans un instant." };
   }
-  return { ok: true, devCode: showDevCode() ? code : undefined };
+  return { ok: true, devCode: onScreen ? code : undefined };
 }
 
 export type VerifyResult =

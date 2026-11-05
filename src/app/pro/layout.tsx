@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Logo, VenueArt } from '@/components/ui';
 import { ProNav } from '@/components/ProNav';
 import { VenueSwitcher } from '@/components/VenueSwitcher';
-import { IconCompass } from '@/components/icons';
+import { IconCompass, IconShield } from '@/components/icons';
 import { getProContext } from '@/lib/pro';
 import { firstPhotos } from '@/lib/venues';
 
@@ -53,6 +53,7 @@ export default async function ProLayout({ children }: { children: React.ReactNod
             {who}
             <em style={{ fontStyle: 'normal', color: '#8F8AB8' }}>{navRole === 'owner' ? 'Gérant' : 'Accueil'}</em>
           </span>
+          {user.isAdmin && <Link href="/admin" title="Back-office Aubaine" aria-label="Back-office Aubaine" style={{ color: 'var(--amber)' }}><IconShield size={18} /></Link>}
           <Link href="/" title="Voir l’app client" style={{ color: '#C9C5E6' }}><IconCompass size={18} /></Link>
         </div>
       </aside>
@@ -65,6 +66,11 @@ export default async function ProLayout({ children }: { children: React.ReactNod
             <VenueArt className="swatch" color={current.venue.color} photoId={photoId} style={{ width: 26, height: 26 }} />
             {current.venue.name}
           </span>
+          {user.isAdmin && (
+            <Link href="/admin" aria-label="Back-office Aubaine" style={{ color: 'var(--amber)', display: 'inline-grid', placeItems: 'center', width: 32, height: 32 }}>
+              <IconShield size={18} />
+            </Link>
+          )}
         </header>
         {items.length > 1 && (
           <div className="pro-top" style={{ paddingTop: 0 }}>

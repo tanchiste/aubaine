@@ -1,14 +1,16 @@
 import 'server-only';
+import { isAdminEmail, testMode } from './env';
 
 type Mail = { to: string; subject: string; text: string; html?: string };
 
 /**
  * Envoie un email via Resend si RESEND_API_KEY est défini.
- * Sans clé (développement), le contenu est écrit dans la console du serveur.
+ * Sans clé, ou en phase de test pour quelqu'un hors de l'équipe Aubaine, le contenu est écrit dans les logs du serveur.
+ * (L'expéditeur de test de Resend ne livre qu'au propriétaire du compte Resend.)
  */
 export async function sendMail(mail: Mail): Promise<void> {
   const key = process.env.RESEND_API_KEY;
-  if (!key) {
+  if (!key || (testMode() && !isAdminEmail(mail.to))) {
     console.log(`\n[email] à ${mail.to} · ${mail.subject}\n${mail.text}\n`);
     return;
   }

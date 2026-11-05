@@ -1,6 +1,6 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { requestLoginCode, verifyLoginCode } from '@/lib/auth';
+import { isAdminEmail, requestLoginCode, verifyLoginCode } from '@/lib/auth';
 
 export type LoginState = { step: 'email' | 'code'; email?: string; error?: string; noAccount?: boolean; devCode?: string; next?: string };
 
@@ -10,9 +10,10 @@ export async function safeNext(v: FormDataEntryValue | null | undefined): Promis
   return s.startsWith('/') && !s.startsWith('//') ? s : '/';
 }
 
-/** Où aller après la connexion : la page demandée, sinon l'espace qui correspond au type de compte */
-export async function homeFor(kind: 'client' | 'exploitant', next: string): Promise<string> {
+/** Où aller après la connexion : la page demandée, sinon le back-office (équipe Aubaine) ou l'espace du compte */
+export async function homeFor(kind: 'client' | 'exploitant', next: string, admin = false): Promise<string> {
   if (next !== '/') return next;
+  if (admin) return '/admin';
   return kind === 'exploitant' ? '/pro' : '/';
 }
 
@@ -32,5 +33,5 @@ export async function loginAction(prev: LoginState, form: FormData): Promise<Log
   const email = String(form.get('email') ?? prev.email ?? '');
   const r = await verifyLoginCode(email, String(form.get('code') ?? ''));
   if (!r.ok) return { ...prev, step: 'code', email, error: r.error, next };
-  redirect(await homeFor(r.user.kind, next));
+  redirect(await homeFor(r.user.kind, next, isAdminEmail(email)));
 }

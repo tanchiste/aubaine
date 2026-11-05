@@ -565,31 +565,27 @@ p { margin: 0; }
 .menu-precise { display: flex; flex-direction: column; gap: 10px; padding: 6px 8px 8px; }
 .menu-precise .select { height: 40px; font-size: 14px; padding: 0 10px; }
 
-/* Téléphone : barre compacte sur deux lignes (jour, puis personnes et horaire) */
-.days-compact { display: flex; gap: 8px; }
-.day-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--soft); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; }
-.day-pill:hover { color: var(--ink); border-color: var(--line); }
-.day-pill[aria-current='true'] { background: var(--night); border-color: var(--night); color: #fff; }
-.day-pill-cal span { color: inherit; font-size: 14px; }
-.day-pill-cal svg { color: var(--primary); }
-.day-pill-cal[aria-current='true'] svg { color: #fff; }
-.days-compact .datepick { flex: 1; }
-.days-compact .day-pill-cal { width: 100%; }
-.days-compact > .day-pill { flex: none; }
+/* Téléphone : une ligne de trois pastilles (jour, personnes, horaire), chacune ouvre un petit menu */
+.quickbar { display: flex; gap: 8px; }
+.qpill { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; white-space: nowrap; }
+.qpill svg { color: var(--primary); flex: none; }
+.qpill[aria-expanded='true'] { border-color: var(--night); }
+.quickbar .picker:first-child .picker-menu { left: 0; right: auto; }
+.quickbar .picker:nth-child(2) .picker-menu { left: 0; right: auto; }
+.qmenu { min-width: 220px; }
+.qmenu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; }
+.qmenu-item:hover, .qmenu-item[aria-selected='true'] { background: var(--soft); }
+.qmenu .datepick-input { position: absolute; left: 12px; bottom: 8px; width: 1px; height: 1px; }
+.qmenu-people { width: 232px; padding: 12px; }
+.people-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.picker-menu .people-grid a { justify-content: center; height: 42px; padding: 0; border-radius: 10px; background: var(--soft); font-family: var(--display); font-weight: 600; }
+.picker-menu .people-grid a[aria-current='true'] { background: var(--night); color: #fff; }
 @media (max-width: 699px) {
-  .days-full { display: none; }
-  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 10px; background: var(--card); border-radius: 18px; padding: 12px; }
-  .tool-days { grid-column: 1 / -1; }
-  .tool-label { display: block; }
-  .toolbar .stepper { width: 100%; justify-content: space-between; height: 42px; border-radius: 12px; background: var(--soft); border-color: var(--line-2); }
-  .toolbar .stepper b { min-width: 0; }
-  .toolbar .tool-btn { width: 100%; height: 42px; padding: 0 10px; gap: 6px; font-size: 13px; }
-  .toolbar .tool-btn span { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
-  .toolbar .picker { width: 100%; }
-  .menu-time { width: min(300px, calc(100vw - 32px)); }
+  .toolbar { display: none; }
+  .quickbar .qpill .lbl-long { display: none; }
 }
 @media (min-width: 700px) {
-  .days-compact { display: none; }
+  .quickbar { display: none; }
 }
 @media (min-width: 700px) {
   .only-phone { display: none; }

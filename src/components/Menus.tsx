@@ -28,12 +28,12 @@ const VERS = Array.from({ length: 14 }, (_, i) => i + 9);
 type Preset = { key: string; label: string; hint: string; href: string; active: boolean };
 
 /** Horaire : toute la journée, un moment, ou « vers 14 h » (créneaux de 14 h à 16 h) */
-export function TimeMenu({ label, shortLabel, presets, de, preciseHref }: { label: string; shortLabel?: string; presets: Preset[]; de?: number; a?: number; preciseHref: string }) {
+export function TimeMenu({ label, shortLabel, presets, de, preciseHref, pill = false }: { label: string; shortLabel?: string; presets: Preset[]; de?: number; a?: number; preciseHref: string; pill?: boolean }) {
   const { open, setOpen, ref } = usePopover();
   const router = useRouter();
   return (
     <div className="picker" ref={ref}>
-      <button type="button" className="tool-btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={pill ? 'qpill' : 'tool-btn'} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <IconClock size={16} />
         <span className="lbl-long">{label}</span>
         <span className="lbl-short">{shortLabel ?? label}</span>
@@ -89,6 +89,94 @@ export function SortMenu({ options }: { options: { key: string; label: string; h
               {o.active && <IconCheck size={16} />}
             </Link>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Téléphone : le jour, en pastille (aujourd'hui, demain, ou le calendrier) */
+export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pickHref, isToday, isTomorrow }: { label: string; value: string; min: string; max: string; todayHref: string; tomorrowHref: string; pickHref: string; isToday: boolean; isTomorrow: boolean }) {
+  const { open, setOpen, ref } = usePopover();
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  const pick = () => {
+    const el = input.current;
+    if (!el) return;
+    try {
+      el.showPicker();
+    } catch {
+      el.focus();
+      el.click();
+    }
+  };
+  return (
+    <div className="picker" ref={ref}>
+      <button type="button" className="qpill" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+          <path d="M3.5 10h17M8 3v4M16 3v4" />
+        </svg>
+        <span>{label}</span>
+      </button>
+      {open && (
+        <div className="picker-menu qmenu" role="dialog" aria-label="Jour">
+          <Link href={todayHref} aria-selected={isToday} onClick={() => setOpen(false)}>
+            <span className="grow">Aujourd’hui</span>
+            {isToday && <IconCheck size={16} />}
+          </Link>
+          <Link href={tomorrowHref} aria-selected={isTomorrow} onClick={() => setOpen(false)}>
+            <span className="grow">Demain</span>
+            {isTomorrow && <IconCheck size={16} />}
+          </Link>
+          <button type="button" className="qmenu-item" aria-selected={!isToday && !isTomorrow} onClick={pick}>
+            <span className="grow">{!isToday && !isTomorrow ? label : 'Choisir une date'}</span>
+            {!isToday && !isTomorrow ? <IconCheck size={16} /> : <IconChevronDown size={16} />}
+          </button>
+          <input
+            ref={input}
+            type="date"
+            className="datepick-input"
+            aria-label="Date"
+            min={min}
+            max={max}
+            defaultValue={value}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setOpen(false);
+              router.push(pickHref.replace('__DATE__', e.target.value));
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Téléphone : le nombre de personnes, en pastille (un choix, un tap) */
+export function PeopleMenu({ n, hrefs }: { n: number; hrefs: string[] }) {
+  const { open, setOpen, ref } = usePopover();
+  return (
+    <div className="picker" ref={ref}>
+      <button type="button" className="qpill" aria-haspopup="dialog" aria-expanded={open} aria-label={`${n} personne${n > 1 ? 's' : ''}`} onClick={() => setOpen((o) => !o)}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="9" cy="8.5" r="3.2" />
+          <path d="M3 19.5c.7-3.3 3-5 6-5s5.3 1.7 6 5" />
+          <circle cx="17" cy="9.5" r="2.5" />
+          <path d="M16.5 14.6c2.3.2 3.9 1.8 4.5 4.4" />
+        </svg>
+        <span>{n}</span>
+      </button>
+      {open && (
+        <div className="picker-menu qmenu qmenu-people" role="dialog" aria-label="Combien de personnes">
+          <span className="label">Combien de personnes ?</span>
+          <div className="people-grid">
+            {hrefs.map((href, i) => (
+              <Link key={href} href={href} aria-current={i + 1 === n ? 'true' : undefined} onClick={() => setOpen(false)}>
+                {i + 1}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>

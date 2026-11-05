@@ -6,7 +6,7 @@ import { Deal, Logo, VenueArt } from '@/components/ui';
 import { HeroDial } from '@/components/brand';
 import { IconBolt, IconChevronRight, IconMinus, IconPlus, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
-import { SortMenu, TimeMenu } from '@/components/Menus';
+import { DateMenu, PeopleMenu, SortMenu, TimeMenu } from '@/components/Menus';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
 import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
@@ -101,6 +101,16 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     ? `${liveDay} : ${liveCount} créneau${liveCount > 1 ? 'x' : ''} creux, jusqu’à −${liveBest} %`
     : `${liveDay} : pas de créneau creux pour ce choix`;
 
+  const timePresets = [
+                { key: 'all', label: 'Toute la journée', hint: '', href: withParams('/', base, { moment: undefined, de: undefined, a: undefined }), active: !hours },
+                ...(Object.keys(MOMENTS) as Moment[]).map((m) => ({
+                  key: m,
+                  label: MOMENTS[m].label,
+                  hint: m === 'matin' ? 'avant 12 h' : m === 'soir' ? 'après 18 h' : '12 h – 18 h',
+                  href: withParams('/', base, { moment: m, de: undefined, a: undefined }),
+                  active: moment === m,
+                })),
+              ];
   const days = Array.from({ length: DAYS_AHEAD }, (_, i) => addDays(today, i));
   const extraDay = !days.includes(date) ? date : null;
   const hrefFor: Record<string, string> = { tout: withParams('/', base, { ville: 'tout' }) };
@@ -134,23 +144,31 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
       </header>
 
       <section className="filters" aria-label="Filtres">
+        <div className="quickbar" aria-label="Jour, personnes et horaire">
+          <DateMenu
+            label={date === today && !rolled ? 'Aujourd’hui' : relativeDay(date, today)}
+            value={date}
+            min={today}
+            max={addDays(today, MAX_DAYS - 1)}
+            isToday={date === today && !rolled}
+            isTomorrow={date === addDays(today, 1)}
+            todayHref={withParams('/', base, { date: undefined })}
+            tomorrowHref={withParams('/', base, { date: addDays(today, 1) })}
+            pickHref={withParams('/', base, { date: '__DATE__' })}
+          />
+          <PeopleMenu n={n} hrefs={Array.from({ length: 12 }, (_, i) => withParams('/', base, { n: i + 1 === 2 ? undefined : i + 1 }))} />
+          <TimeMenu
+            pill
+            label={hours ? hours.label : 'Journée'}
+            de={p.de}
+            a={p.a}
+            preciseHref={withParams('/', { ...base, moment: undefined }, { de: '__DE__', a: '__A__' })}
+            presets={timePresets}
+          />
+        </div>
         <div className="toolbar">
           <div className="tool tool-days">
             <span className="tool-label">Jour</span>
-            <div className="days-compact">
-              <Link className="day-pill" href={withParams('/', base, { date: undefined })} aria-current={date === today && !rolled ? 'true' : undefined}>
-                Aujourd’hui
-              </Link>
-              <DatePicker
-                pill
-                active={date !== today || rolled}
-                value={date}
-                min={today}
-                max={addDays(today, MAX_DAYS - 1)}
-                hrefBase={withParams('/', base, { date: '__DATE__' })}
-                label={date !== today || rolled ? relativeDay(date, today) : 'Plus tard'}
-              />
-            </div>
             <nav className="days days-full" aria-label="Choisir le jour">
               {days.map((d) => {
                 const c = dayChip(d, today);
@@ -190,16 +208,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               de={p.de}
               a={p.a}
               preciseHref={withParams('/', { ...base, moment: undefined }, { de: '__DE__', a: '__A__' })}
-              presets={[
-                { key: 'all', label: 'Toute la journée', hint: '', href: withParams('/', base, { moment: undefined, de: undefined, a: undefined }), active: !hours },
-                ...(Object.keys(MOMENTS) as Moment[]).map((m) => ({
-                  key: m,
-                  label: MOMENTS[m].label,
-                  hint: m === 'matin' ? 'avant 12 h' : m === 'soir' ? 'après 18 h' : '12 h – 18 h',
-                  href: withParams('/', base, { moment: m, de: undefined, a: undefined }),
-                  active: moment === m,
-                })),
-              ]}
+              presets={timePresets}
             />
           </div>
         </div>

@@ -22,7 +22,7 @@ export default async function TicketsPage() {
 
   const Row = ({ r }: { r: (typeof list)[number] }) => {
     const day = brusselsDate(r.slot.startsAt);
-    const label = { checked_in: 'Honorée', cancelled: 'Annulée', no_show: 'Absent', confirmed: 'Passée' }[r.booking.status];
+    const label = { checked_in: 'Honorée', cancelled: 'Annulée', no_show: 'Absent', confirmed: 'Passée', pending: 'Non payée' }[r.booking.status];
     return (
       <Link href={`/billets/${r.booking.id}`} className="card row" style={{ textDecoration: 'none', color: 'var(--ink)', padding: 12 }}>
         <VenueArt className="swatch" color={r.venue.color} photoId={photos.get(r.venue.id)} style={{ width: 48, height: 48, borderRadius: 12 }} />

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
+import { holdsPlace } from '@/lib/bookings';
 import { bookings, offers, slots } from '@/db/schema';
 import { getMyVenues, requireUser } from '@/lib/auth';
 import { MAX_DISCOUNT, MIN_DISCOUNT } from '@/lib/pricing';
@@ -83,7 +84,7 @@ async function ownSlot(slotId: string) {
       n: sql<number>`count(*)::int`,
     })
     .from(bookings)
-    .where(and(eq(bookings.slotId, slotId), inArray(bookings.status, ['confirmed', 'checked_in'])));
+    .where(and(eq(bookings.slotId, slotId), holdsPlace()));
   return { ...row, used, bookings: n };
 }
 

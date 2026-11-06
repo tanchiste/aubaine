@@ -21,7 +21,7 @@ export const fits = (s: SlotView, people: number) =>
 
 const REMAINING = sql`s.capacity - coalesce((
   select sum(case when o.capacity_unit = 'places' then b.people else 1 end)
-  from bookings b where b.slot_id = s.id and b.status in ('confirmed', 'checked_in')
+  from bookings b where b.slot_id = s.id and (b.status in ('confirmed', 'checked_in') or (b.status = 'pending' and b.expires_at > now()))
 ), 0)`;
 
 /** Colonnes communes : le créneau, sa prestation et les places restantes (alias s = slots, o = offers) */

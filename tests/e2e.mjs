@@ -1,5 +1,6 @@
 // Parcours complet : un exploitant inscrit sa fiche, l'admin la valide, un client la voit.
 // Usage : AUTH_DEV_CODES=1 ADMIN_DEV_CODES=1 npx next start, puis BASE=http://localhost:3000 node tests/e2e.mjs   (base locale avec ADMIN_EMAILS=admin@aubaine.test)
+// Paiements Stripe : voir tests/payments.mjs (avec stripe-mock).
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');

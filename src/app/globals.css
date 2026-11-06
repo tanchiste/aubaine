@@ -787,3 +787,9 @@ p { margin: 0; }
 .days-arrow:hover { color: var(--primary); border-color: #C9C5DA; }
 .days-arrow[aria-disabled='true'] { color: #C9C5DA; background: transparent; }
 .day-cal:focus:not(:focus-visible), .days-arrow:focus:not(:focus-visible) { outline: none; }
+
+/* Moyens de paiement acceptés */
+.pay-methods { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; text-align: center; }
+.pay-methods p { width: 100%; margin-top: 2px; }
+.pay-badge { padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--card); font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.pay-badge.bancontact { border-color: #005498; color: #005498; }

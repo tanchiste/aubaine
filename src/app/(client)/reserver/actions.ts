@@ -6,8 +6,7 @@ import { db } from '@/db';
 import { users } from '@/db/schema';
 import { requireUser } from '@/lib/auth';
 import { BookingError, createBooking } from '@/lib/bookings';
-import { sendMail } from '@/lib/email';
-import { euros, longDate, brusselsDate, timeLabel } from '@/lib/format';
+import { paymentsEnabled, releasePending, sendConfirmation, startCheckout } from '@/lib/payments';
 
 export type BookState = { error?: string };
 
@@ -18,24 +17,32 @@ export async function bookAction(_prev: BookState, form: FormData): Promise<Book
   const firstName = String(form.get('firstName') ?? '').trim().slice(0, 40);
   if (!user.firstName && !firstName) return { error: 'Indique ton prénom : il s’affiche à l’accueil.' };
   if (!/^[0-9a-f-]{36}$/i.test(slotId) || !Number.isFinite(people)) return { error: 'Réservation invalide.' };
+  const online = paymentsEnabled();
 
   let id: string;
+  let payUrl: string | null = null;
   try {
     if (!user.firstName) await db.update(users).set({ firstName }).where(eq(users.id, user.id));
-    // Paiement simulé pendant la phase de test : Stripe prendra sa place ici.
-    const { booking, venue, slot } = await createBooking(user.id, slotId, people);
+    // Paiement en ligne : les places sont tenues pendant le paiement Stripe. Sinon, paiement simulé (phase de test).
+    const { booking } = await createBooking(user.id, slotId, people, { pay: online ? 'online' : 'simulated' });
     id = booking.id;
-    const app = process.env.APP_URL ?? 'http://localhost:3000';
-    await sendMail({
-      to: user.email,
-      subject: `C'est réservé : ${venue.name} à ${timeLabel(slot.startsAt)}`,
-      text: `${venue.name} t'attend ${longDate(brusselsDate(slot.startsAt))} à ${timeLabel(slot.startsAt)}, pour ${booking.people} pers.\nCode à montrer à l'accueil : ${booking.code}\nTotal : ${euros(booking.totalCents)}\n\nTon billet : ${app}/billets/${booking.id}\nAnnulation gratuite jusqu'à 2 h avant.`,
-    }).catch(() => {});
+    if (online) {
+      try {
+        payUrl = await startCheckout(booking.id);
+      } catch (e) {
+        console.error('[stripe] ouverture du paiement', e);
+        await releasePending(booking.id);
+        return { error: 'Le paiement n’a pas pu s’ouvrir. Réessaie dans un instant.' };
+      }
+    } else {
+      await sendConfirmation(booking.id);
+    }
   } catch (e) {
     if (e instanceof BookingError) return { error: e.message };
     console.error(e);
     return { error: 'La réservation n’a pas abouti. Réessaie dans un instant.' };
   }
+  if (payUrl) redirect(payUrl);
   revalidatePath('/billets');
   redirect(`/billets/${id}?nouveau=1`);
 }

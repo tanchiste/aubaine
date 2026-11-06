@@ -9,12 +9,13 @@ import { euros, longDate, brusselsDate, timeLabel } from '@/lib/format';
 import { quote } from '@/lib/pricing';
 import { firstPhotos } from '@/lib/venues';
 import { getCurrentUser } from '@/lib/auth';
+import { paymentsEnabled } from '@/lib/payments';
 import { BookForm } from './BookForm';
 
 export const metadata = { title: 'Ta réservation' };
 
 /** Récapitulatif et confirmation de la réservation (paiement simulé pendant la phase de test) */
-export default async function BookingPage({ searchParams }: { searchParams: Promise<{ slot?: string; n?: string }> }) {
+export default async function BookingPage({ searchParams }: { searchParams: Promise<{ slot?: string; n?: string; paiement?: string }> }) {
   const sp = await searchParams;
   if (!sp.slot || !/^[0-9a-f-]{36}$/i.test(sp.slot)) notFound();
   const [row] = await db
@@ -51,8 +52,10 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
         <div className="row" style={{ justifyContent: 'space-between' }}><dt className="muted">Remise heures creuses (−{slot.discountPct} %)</dt><dd style={{ margin: 0, fontWeight: 600, color: 'var(--deal)' }}>−{euros(price.saved)}</dd></div>
         <div className="row" style={{ justifyContent: 'space-between', fontSize: 18, fontWeight: 800, borderTop: '1px dashed var(--line)', paddingTop: 10 }}><dt>Total</dt><dd style={{ margin: 0 }}>{euros(price.total)}</dd></div>
       </dl>
+      {sp.paiement === 'annule' && <p className="notice notice-amber" role="status">Paiement annulé : rien n’a été débité. Tu peux réessayer.</p>}
+      {sp.paiement === 'echec' && <p className="notice notice-amber" role="alert">Le paiement n’a pas abouti : rien n’a été débité. Réessaie ou choisis un autre moyen.</p>}
       {user ? (
-        <BookForm slotId={slot.id} people={n} total={euros(price.total)} needName={!user.firstName} />
+        <BookForm slotId={slot.id} people={n} total={euros(price.total)} needName={!user.firstName} online={paymentsEnabled()} />
       ) : (
         <div className="stack" style={{ ['--gap' as string]: '10px' }}>
           <Link className="btn btn-primary btn-lg btn-block" href={`/inscription?type=client&suite=${encodeURIComponent(`/reserver?slot=${slot.id}&n=${n}`)}`}>

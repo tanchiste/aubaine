@@ -57,7 +57,8 @@ export const memberRole = pgEnum('member_role', ['owner', 'staff']);
 /** client : cherche des activités ; exploitant : gère un établissement (ou en fait partie) */
 export const accountKind = pgEnum('account_kind', ['client', 'exploitant']);
 
-export const bookingStatus = pgEnum('booking_status', ['confirmed', 'checked_in', 'cancelled', 'no_show']);
+/** pending : places tenues pendant le paiement en ligne (jusqu'à expires_at) */
+export const bookingStatus = pgEnum('booking_status', ['pending', 'confirmed', 'checked_in', 'cancelled', 'no_show']);
 
 /* ---------- Comptes ---------- */
 
@@ -265,6 +266,15 @@ export const bookings = pgTable(
     checkedInAt: ts('checked_in_at'),
     cancelledAt: ts('cancelled_at'),
     createdAt: ts('created_at').notNull().defaultNow(),
+    /** Paiement : fin de la tenue des places, moyen utilisé (bancontact, card, simulé), références Stripe */
+    expiresAt: ts('expires_at'),
+    paymentMethod: text('payment_method'),
+    stripeSessionId: text('stripe_session_id').unique(),
+    stripePaymentIntent: text('stripe_payment_intent'),
+    paidAt: ts('paid_at'),
+    refundedAt: ts('refunded_at'),
+    /** commission Aubaine figée au paiement */
+    feeCents: integer('fee_cents').notNull().default(0),
   },
   (t) => [
     index('bookings_slot_idx').on(t.slotId),

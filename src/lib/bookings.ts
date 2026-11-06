@@ -1,9 +1,9 @@
 import 'server-only';
 import crypto from 'node:crypto';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { bookings, offers, slots, users, venues } from '@/db/schema';
-import { quote } from './pricing';
+import { COMMISSION_PCT, quote } from './pricing';
 import { unitsFor } from './venues';
 
 /** Délai d'annulation gratuite avant le début du créneau */
@@ -19,11 +19,19 @@ function newCode(): string {
 
 export class BookingError extends Error {}
 
+/** Durée pendant laquelle les places restent tenues pour un client qui paie en ligne */
+export const HOLD_MINUTES = 35;
+
+/** Réservations qui occupent des places : confirmées, arrivées, ou en cours de paiement et pas encore expirées */
+export const holdsPlace = () =>
+  or(inArray(bookings.status, ['confirmed', 'checked_in']), and(eq(bookings.status, 'pending'), gt(bookings.expiresAt, sql`now()`)));
+
 /**
- * Crée une réservation confirmée. Le créneau est verrouillé pendant la transaction :
- * deux clients qui réservent la dernière place en même temps ne peuvent pas l'obtenir tous les deux.
+ * Crée une réservation : confirmée tout de suite (paiement simulé), ou en attente pendant le paiement en ligne.
+ * Le créneau est verrouillé pendant la transaction : deux clients qui réservent la dernière place
+ * en même temps ne peuvent pas l'obtenir tous les deux.
  */
-export async function createBooking(userId: string, slotId: string, people: number) {
+export async function createBooking(userId: string, slotId: string, people: number, opts: { pay: 'online' | 'simulated' } = { pay: 'simulated' }) {
   return db.transaction(async (tx) => {
     const [row] = await tx
       .select({ slot: slots, venue: venues, offer: offers })
@@ -42,7 +50,7 @@ export async function createBooking(userId: string, slotId: string, people: numb
     const [{ used }] = await tx
       .select({ used: sql<number>`coalesce(sum(case when ${offer.capacityUnit} = 'places' then ${bookings.people} else 1 end), 0)::int` })
       .from(bookings)
-      .where(and(eq(bookings.slotId, slot.id), inArray(bookings.status, ['confirmed', 'checked_in'])));
+      .where(and(eq(bookings.slotId, slot.id), holdsPlace()));
     if (slot.capacity - used < unitsFor(offer, people)) throw new BookingError('Il ne reste plus assez de place sur ce créneau.');
 
     const price = quote(offer, people, slot.discountPct);
@@ -58,6 +66,9 @@ export async function createBooking(userId: string, slotId: string, people: numb
           fullCents: price.full,
           discountPct: slot.discountPct,
           totalCents: price.total,
+          ...(opts.pay === 'online'
+            ? { status: 'pending' as const, expiresAt: new Date(Date.now() + HOLD_MINUTES * 60_000) }
+            : { status: 'confirmed' as const, paymentMethod: 'simulé', feeCents: Math.round((price.total * COMMISSION_PCT) / 100) }),
         })
         .onConflictDoNothing({ target: bookings.code })
         .returning();
@@ -87,7 +98,8 @@ export async function myBookings(userId: string) {
     .innerJoin(slots, eq(slots.id, bookings.slotId))
     .innerJoin(offers, eq(offers.id, slots.offerId))
     .innerJoin(venues, eq(venues.id, bookings.venueId))
-    .where(eq(bookings.userId, userId))
+    // Un paiement abandonné n'est pas une réservation : il n'apparaît ni dans les billets ni dans l'historique.
+    .where(and(eq(bookings.userId, userId), ne(bookings.status, 'pending')))
     .orderBy(desc(slots.startsAt))
     .limit(50);
 }
@@ -109,6 +121,7 @@ export async function checkIn(venueId: string, by: { code?: string; id?: string 
   const b = row.booking;
   if (b.status === 'checked_in') return { ok: false as const, error: `${row.firstName ?? 'Ce client'} est déjà validé.` };
   if (b.status === 'cancelled') return { ok: false as const, error: 'Cette réservation a été annulée.' };
+  if (b.status === 'pending') return { ok: false as const, error: 'Cette réservation n’a pas été payée.' };
   // Validation possible le jour même, jusqu'à 3 h après le début.
   const diff = row.startsAt.getTime() - Date.now();
   if (diff > 12 * 3_600_000) return { ok: false as const, error: 'Cette réservation est pour un autre jour.' };

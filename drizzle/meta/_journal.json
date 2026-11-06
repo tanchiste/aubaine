@@ -36,6 +36,13 @@
       "when": 1793880829491,
       "tag": "0004_localisation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793979404028,
+      "tag": "0005_paiements",
+      "breakpoints": true
     }
   ]
 }

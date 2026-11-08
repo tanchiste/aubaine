@@ -807,10 +807,8 @@ p { margin: 0; }
 .deal-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: 2px; }
 .deal-foot > .small { line-height: 1.35; min-width: 0; }
 
-/* Filtres de catégorie en couleur : teinte légère, pastille de couleur, plein quand le filtre est choisi */
-.cat-chip { gap: 7px; background: color-mix(in srgb, var(--cat) 9%, #fff); border-color: color-mix(in srgb, var(--cat) 30%, #fff); color: color-mix(in srgb, var(--cat) 70%, #17142E); }
-.cat-chip::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--cat); }
+/* Filtres de catégorie en couleur : teinte légère, plein quand le filtre est choisi */
+.cat-chip { background: color-mix(in srgb, var(--cat) 9%, #fff); border-color: color-mix(in srgb, var(--cat) 30%, #fff); color: color-mix(in srgb, var(--cat) 70%, #17142E); }
 .cat-chip:hover { background: color-mix(in srgb, var(--cat) 16%, #fff); border-color: var(--cat); color: color-mix(in srgb, var(--cat) 70%, #17142E); }
 .cat-chip[aria-current='true'] { background: var(--cat); border-color: var(--cat); box-shadow: none; color: #fff; }
-.cat-chip[aria-current='true']::before { background: #fff; }
 .chip-all[aria-current='true'] { background: var(--night); border-color: var(--night); box-shadow: none; color: #fff; }

@@ -285,13 +285,19 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                   </VenueArt>
                   <span className="deal-body">
                     <b className="deal-name">{venue.name}</b>
-                    <span className="small muted">
-                      {relativeDay(d, today)} · {timeLabel(slot.startsAt)} · {kmTo(venue) !== null ? `à ${distanceLabel(kmTo(venue)!)}` : venue.city}
-                    </span>
-                    <span className="row" style={{ ['--gap' as string]: '6px', marginTop: 2 }}>
-                      <b className="num" style={{ fontSize: 16 }}>{euros(unit)}</b>
-                      <s className="small muted">{euros(slot.offer.priceCents)}</s>
-                      <span className="small muted">{slot.offer.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
+                    {/* Même lecture que les cartes des lieux : infos à gauche, prix remisé à droite avec le prix normal barré */}
+                    <span className="deal-foot">
+                      <span className="small muted">
+                        {relativeDay(d, today)} · {timeLabel(slot.startsAt)}
+                        <br />
+                        {kmTo(venue) !== null ? `à ${distanceLabel(kmTo(venue)!)}` : venue.city}
+                      </span>
+                      <span className="card-price" aria-label={`${euros(unit)} au lieu de ${euros(slot.offer.priceCents)}, ${slot.offer.priceUnit === 'session' ? 'la séance' : 'par personne'}`}>
+                        <b className="num">{euros(unit)}</b>
+                        <span className="small muted">
+                          <s>{euros(slot.offer.priceCents)}</s> {slot.offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}
+                        </span>
+                      </span>
                     </span>
                   </span>
                 </Link>
@@ -387,20 +393,24 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                       <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
                     </VenueArt>
                     <div className="body">
-                      <div className="stack" style={{ ['--gap' as string]: '2px' }}>
-                        <h3 style={{ fontSize: 17, fontWeight: 800 }}>{venue.name}</h3>
-                        <span className="small muted">
-                          {venue.area ? `${venue.area}, ` : ''}
-                          {venue.city}
-                          {kmTo(venue) !== null && <b className="km"> · {distanceLabel(kmTo(venue)!)}</b>}
-                        </span>
-                        {/* Même lecture que les meilleurs deals : prix remisé, prix normal barré, unité */}
-                        <span className="row card-price" style={{ ['--gap' as string]: '6px', marginTop: 2 }} aria-label={`À partir de ${euros(from)} au lieu de ${euros(cheapest.offer.priceCents)}, ${cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par personne'}, remise comprise`}>
-                          <span className="small muted">dès</span>
-                          <b className="num" style={{ fontSize: 16 }}>{euros(from)}</b>
-                          <s className="small muted">{euros(cheapest.offer.priceCents)}</s>
-                          <span className="small muted">{cheapest.offer.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
-                        </span>
+                      <div className="row" style={{ alignItems: 'flex-start' }}>
+                        <div className="grow stack" style={{ ['--gap' as string]: '2px', minWidth: 0 }}>
+                          <h3 style={{ fontSize: 17, fontWeight: 800 }}>{venue.name}</h3>
+                          <span className="small muted">
+                            {venue.area ? `${venue.area}, ` : ''}
+                            {venue.city}
+                            {kmTo(venue) !== null && <b className="km"> · {distanceLabel(kmTo(venue)!)}</b>}
+                          </span>
+                        </div>
+                        {/* Même lecture que les meilleurs deals : infos à gauche, prix remisé à droite avec le prix normal barré */}
+                        <div className="card-price" aria-label={`À partir de ${euros(from)} au lieu de ${euros(cheapest.offer.priceCents)}, ${cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par personne'}, remise comprise`}>
+                          <span>
+                            <span className="small muted">dès</span> <b className="num">{euros(from)}</b>
+                          </span>
+                          <span className="small muted">
+                            <s>{euros(cheapest.offer.priceCents)}</s> {cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </Link>

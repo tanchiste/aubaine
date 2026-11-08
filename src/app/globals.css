@@ -799,4 +799,9 @@ p { margin: 0; }
 .qmenu-day { display: flex; flex-direction: column; gap: 1px; }
 .qmenu-day small { font-size: 12px; font-weight: 600; color: var(--deal-ink); }
 .qmenu-day small.none { color: var(--muted); font-weight: 500; }
-.card-price { align-items: baseline; flex-wrap: wrap; }
+/* Prix des cartes (lieux et meilleurs deals) : toujours à droite, prix remisé puis prix normal barré */
+.card-price { flex: none; display: flex; flex-direction: column; align-items: flex-end; text-align: right; white-space: nowrap; }
+.card-price .num { font-size: 17px; }
+.card-price s { color: var(--muted); }
+.deal-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.deal-foot > .small { line-height: 1.35; min-width: 0; }

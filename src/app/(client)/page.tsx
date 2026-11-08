@@ -9,12 +9,12 @@ import { SearchBox } from '@/components/SearchBox';
 import { VenueMap, type MapPin } from '@/components/VenueMap';
 import { DateMenu, PeopleMenu, SortMenu, TimeMenu } from '@/components/Menus';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
-import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
+import { addDays, brusselsDate, capitalize, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
 import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
 import type { Venue } from '@/db/schema';
-import { bestDeals, cities, explorer, lastMinute, minPrice, searchVenues } from '@/lib/venues';
+import { bestDeals, cities, dayAvailability, explorer, lastMinute, minPrice, searchVenues, type DayAvailability } from '@/lib/venues';
 
 type SP = Record<string, string | string[] | undefined>;
 
@@ -34,12 +34,20 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
   const mapView = raw.vue === 'carte';
 
   let date = p.date;
-  const [first, lm, deals, cityList] = await Promise.all([
+  // Bande des jours : où il reste de la place avec ces filtres (au moins 7 jours, jusqu'au jour choisi)
+  const availSpan = Math.max(DAYS_AHEAD, Math.round((Date.parse(date) - Date.parse(today)) / 86_400_000) + 1);
+  const [first, lm, deals, cityList, avail] = await Promise.all([
     explorer({ ...filters, date, hours, sort, from: pos }),
     date === today && !category && !q && !hours ? lastMinute(today, n, city) : Promise.resolve([]),
     q ? Promise.resolve([]) : bestDeals({ ...filters, today, hours }),
     cities(),
+    dayAvailability({ ...filters, hours, from: today, days: availSpan }),
   ]);
+  const availOf = (d: string): DayAvailability | undefined => avail.get(d);
+  const availLabel = (d: string) => {
+    const a = availOf(d);
+    return a ? `${a.venues} lieu${a.venues > 1 ? 'x' : ''} · jusqu’à −${a.best} %` : 'aucun créneau';
+  };
 
   // Le soir, plus rien aujourd'hui : on montre directement demain.
   let items = first;
@@ -178,6 +186,8 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
             max={addDays(today, MAX_DAYS - 1)}
             isToday={date === today && !rolled}
             isTomorrow={date === addDays(today, 1)}
+            todayInfo={availLabel(today)}
+            tomorrowInfo={availLabel(addDays(today, 1))}
             todayHref={withParams('/', base, { date: undefined })}
             tomorrowHref={withParams('/', base, { date: addDays(today, 1) })}
             pickHref={withParams('/', base, { date: '__DATE__' })}
@@ -195,22 +205,26 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
         <div className="toolbar">
           <div className="tool tool-days">
             <span className="tool-label">Jour</span>
-            <nav className="days days-full" aria-label="Choisir le jour">
-              {days.map((d) => {
+            <nav className="days days-full avail" aria-label="Choisir le jour">
+              {[...days, ...(extraDay ? [extraDay] : [])].map((d) => {
                 const c = dayChip(d, today);
+                const a = availOf(d);
                 return (
-                  <Link scroll={false} key={d} className="day" href={withParams('/', base, { date: d === today ? undefined : d })} aria-current={d === date ? 'true' : undefined}>
+                  <Link
+                    scroll={false}
+                    key={d}
+                    className={`day${a ? '' : ' none'}`}
+                    href={d === extraDay ? withParams('/', base) : withParams('/', base, { date: d === today ? undefined : d })}
+                    aria-current={d === date ? 'true' : undefined}
+                    title={a ? `${a.venues} lieu${a.venues > 1 ? 'x' : ''}, ${a.slots} créneau${a.slots > 1 ? 'x' : ''}, jusqu’à −${a.best} %` : 'Aucun créneau avec ces filtres'}
+                    aria-label={`${capitalize(longDate(d))} : ${availLabel(d)}`}
+                  >
                     <span>{c.top}</span>
                     <b>{c.num}</b>
+                    <em>{a ? `−${a.best} %` : '–'}</em>
                   </Link>
                 );
               })}
-              {extraDay && (
-                <Link scroll={false} className="day" href={withParams('/', base)} aria-current="true">
-                  <span>{dayChip(extraDay, today).top}</span>
-                  <b>{dayChip(extraDay, today).num}</b>
-                </Link>
-              )}
               <DatePicker value={date} min={today} max={addDays(today, MAX_DAYS - 1)} hrefBase={withParams('/', base, { date: '__DATE__' })} label="Plus tard" />
             </nav>
           </div>
@@ -382,9 +396,12 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                             {kmTo(venue) !== null && <b className="km"> · {distanceLabel(kmTo(venue)!)}</b>}
                           </span>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <span className="small muted">dès</span> <b className="num" style={{ fontSize: 17 }}>{euros(from)}</b>
-                          <div className="small muted">{cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}</div>
+                        {/* Prix déjà remisé : le prix normal barré à côté lève le doute */}
+                        <div className="card-price" aria-label={`À partir de ${euros(from)} au lieu de ${euros(cheapest.offer.priceCents)}, ${cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par personne'}, remise comprise`}>
+                          <span className="small muted">dès</span> <b className="num">{euros(from)}</b>
+                          <div className="small muted">
+                            <s>{euros(cheapest.offer.priceCents)}</s> {cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}
+                          </div>
                         </div>
                       </div>
                     </div>

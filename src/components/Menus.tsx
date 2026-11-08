@@ -96,7 +96,7 @@ export function SortMenu({ options }: { options: { key: string; label: string; h
 }
 
 /** Téléphone : le jour, en pastille (aujourd'hui, demain, ou le calendrier) */
-export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pickHref, isToday, isTomorrow }: { label: string; value: string; min: string; max: string; todayHref: string; tomorrowHref: string; pickHref: string; isToday: boolean; isTomorrow: boolean }) {
+export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pickHref, isToday, isTomorrow, todayInfo, tomorrowInfo }: { label: string; value: string; min: string; max: string; todayHref: string; tomorrowHref: string; pickHref: string; isToday: boolean; isTomorrow: boolean; todayInfo?: string; tomorrowInfo?: string }) {
   const { open, setOpen, ref } = usePopover();
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -122,11 +122,17 @@ export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pick
       {open && (
         <div className="picker-menu qmenu" role="dialog" aria-label="Jour">
           <Link scroll={false} href={todayHref} aria-selected={isToday} onClick={() => setOpen(false)}>
-            <span className="grow">Aujourd’hui</span>
+            <span className="grow qmenu-day">
+              Aujourd’hui
+              {todayInfo && <small className={todayInfo === 'aucun créneau' ? 'none' : ''}>{todayInfo}</small>}
+            </span>
             {isToday && <IconCheck size={16} />}
           </Link>
           <Link scroll={false} href={tomorrowHref} aria-selected={isTomorrow} onClick={() => setOpen(false)}>
-            <span className="grow">Demain</span>
+            <span className="grow qmenu-day">
+              Demain
+              {tomorrowInfo && <small className={tomorrowInfo === 'aucun créneau' ? 'none' : ''}>{tomorrowInfo}</small>}
+            </span>
             {isTomorrow && <IconCheck size={16} />}
           </Link>
           <button type="button" className="qmenu-item" aria-selected={!isToday && !isTomorrow} onClick={pick}>

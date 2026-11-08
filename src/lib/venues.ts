@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { offers, venuePhotos, venues, type Offer, type Venue, type VenueCategory } from '@/db/schema';
 import { MAX_DISCOUNT, MIN_DISCOUNT, discounted } from './pricing';
-import { addDays, brusselsHour } from './format';
+import { addDays, brusselsDate, brusselsHour } from './format';
 import type { HourRange, Sort } from './params';
 import { matchVenue } from './search';
 import { distanceKm, hasPos, type LatLng } from './geo';
@@ -142,6 +142,43 @@ export async function searchVenues(q: string, opts: { people?: number; city?: st
     })
     .sort((a, b) => Number(!a.next) - Number(!b.next) || (b.best ?? 0) - (a.best ?? 0) || a.venue.name.localeCompare(b.venue.name, 'fr'))
     .slice(0, opts.limit ?? 20);
+}
+
+export type DayAvailability = { venues: number; slots: number; best: number };
+
+/**
+ * Disponibilités jour par jour pour les filtres d'Explorer (catégorie, recherche, ville, personnes, horaire) :
+ * nombre de lieux, de créneaux et meilleure remise. Une seule requête pour toute la bande de jours.
+ */
+export async function dayAvailability(opts: Filters & { hours?: HourRange; from: string; days: number }): Promise<Map<string, DayAvailability>> {
+  const fit = await publishedVenues(opts);
+  const out = new Map<string, DayAvailability & { ids: Set<string> }>();
+  if (fit.length === 0) return out;
+  const rows = await db.execute<SlotRow>(sql`
+    select ${SLOT_COLS}
+    from slots s
+    join venues v on v.id = s.venue_id
+    join offers o on o.id = s.offer_id
+    where v.status = 'published' and s.is_open and o.is_active
+      and s.starts_at > now()
+      and s.starts_at >= ${dayStart(opts.from)} and s.starts_at < (${opts.from}::date + ${opts.days}::int)::timestamp at time zone 'Europe/Brussels'
+      and s.venue_id in (${sql.join(fit.map((v) => sql`${v.id}::uuid`), sql`, `)})`);
+  for (const r of rows) {
+    const slot = toSlot(r);
+    if (!fits(slot, opts.people)) continue;
+    if (opts.hours) {
+      const h = brusselsHour(slot.startsAt);
+      if (h < opts.hours.from || h >= opts.hours.to) continue;
+    }
+    const d = brusselsDate(slot.startsAt);
+    const cur = out.get(d) ?? { venues: 0, slots: 0, best: 0, ids: new Set<string>() };
+    cur.ids.add(r.venue_id);
+    cur.venues = cur.ids.size;
+    cur.slots += 1;
+    cur.best = Math.max(cur.best, slot.discountPct);
+    out.set(d, cur);
+  }
+  return out;
 }
 
 /** Prix le plus bas parmi des créneaux (par personne ou la séance, selon la prestation) */

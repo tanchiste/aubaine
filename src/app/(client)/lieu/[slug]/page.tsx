@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { Deal, VenueArt } from '@/components/ui';
 import { IconBack, IconChevronRight, IconClock, IconMinus, IconPin, IconPlus, IconUsers, IconX } from '@/components/icons';
 import { getCurrentUser, getMyVenues } from '@/lib/auth';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES, catStyle } from '@/lib/categories';
 import { addDays, brusselsDate, brusselsHour, capitalize, dayChip, euros, isDateStr, longDate, timeLabel } from '@/lib/format';
 import { DAYS_AHEAD, MAX_DAYS, clientParams, withParams } from '@/lib/params';
 import { DatePicker } from '@/components/DatePicker';
@@ -137,7 +137,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
         )}
         <div className="stack" style={{ ['--gap' as string]: '4px' }}>
           <span className="row" style={{ ['--gap' as string]: '8px' }}>
-            <span className="cat-tag soft">{cat.label}</span>
+            <span className="cat-tag soft" style={catStyle(venue.category)}>{cat.label}</span>
             <span className="small muted" style={{ fontWeight: 600 }}>
               {venue.area ? `${venue.area}, ` : ''}
               {venue.city}

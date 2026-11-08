@@ -8,7 +8,7 @@ import { IconBolt, IconChevronRight, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
 import { VenueMap, type MapPin } from '@/components/VenueMap';
 import { DateMenu, PeopleMenu, SortMenu, TimeMenu } from '@/components/Menus';
-import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
+import { CATEGORIES, CATEGORY_KEYS, catStyle } from '@/lib/categories';
 import { addDays, brusselsDate, capitalize, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
@@ -247,11 +247,11 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
 
         <div className="cats-row">
           <nav className="chips" aria-label="Catégories">
-            <Link scroll={false} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
+            <Link scroll={false} className="chip chip-all" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
               Tout
             </Link>
             {CATEGORY_KEYS.filter((k) => k !== 'autre').map((k) => (
-              <Link scroll={false} key={k} className="chip" href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
+              <Link scroll={false} key={k} className="chip cat-chip" style={catStyle(k)} href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
                 {CATEGORIES[k].short}
               </Link>
             ))}
@@ -281,7 +281,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                 <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: d === today ? undefined : d, slot: slot.id })}>
                   <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category}>
                     <Deal pct={slot.discountPct} />
-                    <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
+                    <span className="cat-tag" style={catStyle(venue.category)}>{CATEGORIES[venue.category].short}</span>
                   </VenueArt>
                   <span className="deal-body">
                     <b className="deal-name">{venue.name}</b>
@@ -390,7 +390,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                   <Link className="venue-link" href={link}>
                     <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category}>
                       <Deal pct={best} />
-                      <span className="cat-tag">{CATEGORIES[venue.category].short}</span>
+                      <span className="cat-tag" style={catStyle(venue.category)}>{CATEGORIES[venue.category].short}</span>
                     </VenueArt>
                     <div className="body">
                       <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -446,7 +446,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                 <span className="grow stack" style={{ ['--gap' as string]: '3px' }}>
                   <span className="row" style={{ ['--gap' as string]: '6px' }}>
                     <b>{venue.name}</b>
-                    <span className="cat-tag soft">{CATEGORIES[venue.category].short}</span>
+                    <span className="cat-tag soft" style={catStyle(venue.category)}>{CATEGORIES[venue.category].short}</span>
                   </span>
                   <span className="small muted">
                     {venue.city}

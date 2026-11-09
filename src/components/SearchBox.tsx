@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { startNavigation } from './NavProgress';
 import { IconSearch } from './icons';
 
 type Suggestion = {
@@ -56,6 +57,7 @@ export function SearchBox({ defaultValue = '', searchHref, categoryHref, city }:
   ];
   const go = (href: string) => {
     setOpen(false);
+    startNavigation();
     router.push(href);
   };
   const submit = () => go(q.trim() ? searchHref.replace('__Q__', encodeURIComponent(q.trim())) : searchHref.replace(/[?&]q=__Q__/, ''));
@@ -109,7 +111,7 @@ export function SearchBox({ defaultValue = '', searchHref, categoryHref, city }:
             return (
               <a key={v.slug} id={`${listId}-${i}`} role="option" aria-selected={active === i} href={`/lieu/${v.slug}`} onClick={(e) => { e.preventDefault(); go(`/lieu/${v.slug}`); }}>
                 <span className="suggest-thumb" style={{ background: v.color }}>
-                  {v.photoId && <img src={`/api/photos/${v.photoId}`} alt="" />}
+                  {v.photoId && <img src={`/api/photos/${v.photoId}?w=160`} alt="" loading="lazy" />}
                 </span>
                 <span className="grow" style={{ minWidth: 0 }}>
                   <b>{v.name}</b>

@@ -37,10 +37,13 @@ async function book(page) {
   await page.locator('.slot:not(.full)').first().click();
   await page.click('.sticky-cta a:has-text("Réserver")');
   await page.waitForURL(/\/reserver/);
+  // L'adresse change dès l'affichage du squelette de chargement : on attend le vrai récapitulatif.
+  await page.locator('.pay-badge').first().waitFor();
   ok(await page.locator('.pay-badge:has-text("Bancontact")').isVisible(), 'Récapitulatif : Bancontact et carte proposés');
   const stripeUrl = page.waitForRequest((r) => /checkout\.stripe\.com|stripe\.com/.test(r.url()));
   await page.click('button:has-text("Payer")');
   const req = await stripeUrl;
+  await page.waitForURL(/stripe\.com/);
   const [b] = await sql`select * from bookings where user_id = (select id from users where email = ${email}) order by created_at desc limit 1`;
   return { b, url: req.url() };
 }
@@ -90,6 +93,8 @@ try {
   const second = await book(page);
   await page.goto(`${BASE}/reserver/retour?annule=${second.b.id}`);
   await page.waitForURL(/paiement=annule/);
+  // La page arrive en flux (squelette puis contenu) : on attend le message lui-même.
+  await page.locator('text=Paiement annulé').waitFor({ timeout: 8000 }).catch(() => {});
   ok(await page.locator('text=Paiement annulé').isVisible(), 'Retour sans payer : message clair, rien de débité');
   const [released] = await sql`select status from bookings where id = ${second.b.id}`;
   ok(released.status === 'cancelled', 'Paiement abandonné : places libérées');

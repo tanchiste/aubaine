@@ -91,15 +91,15 @@ export default async function SlotsPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="slots-actions">
         <nav className="week-nav" aria-label="Changer de semaine">
-          <Link className="icon-btn" href={base({ semaine: addDays(week, -7) })} aria-label="Semaine précédente"><IconBack size={18} /></Link>
+          <Link prefetch={false} className="icon-btn" href={base({ semaine: addDays(week, -7) })} aria-label="Semaine précédente"><IconBack size={18} /></Link>
           <span>
             {rangeFmt.format(new Date(week + 'T12:00:00Z'))} – {rangeFmt.format(new Date(addDays(week, 6) + 'T12:00:00Z'))}
           </span>
-          <Link className="icon-btn" href={base({ semaine: addDays(week, 7) })} aria-label="Semaine suivante"><IconChevronRight size={18} /></Link>
+          <Link prefetch={false} className="icon-btn" href={base({ semaine: addDays(week, 7) })} aria-label="Semaine suivante"><IconChevronRight size={18} /></Link>
           {week !== mondayOf(today) && <Link className="today-link" href="/pro/creneaux">Cette semaine</Link>}
         </nav>
         {active.length > 0 && panel !== 'new' && (
-          <Link className="btn btn-primary open-slots-btn" href={base({ date: week < today ? today : week })}>
+          <Link prefetch={false} className="btn btn-primary open-slots-btn" href={base({ date: week < today ? today : week })}>
             <IconPlus size={18} /> Ouvrir des créneaux
           </Link>
         )}
@@ -131,7 +131,7 @@ export default async function SlotsPage({ searchParams }: { searchParams: Promis
                   const gone = r.startsAt.getTime() < now;
                   const full = r.used >= r.capacity;
                   return (
-                    <Link
+                    <Link prefetch={false}
                       key={r.id}
                       href={base({ creneau: r.id })}
                       className={`slot-card${r.is_open ? '' : ' closed'}${gone ? ' gone' : ''}${editing?.id === r.id ? ' editing' : ''}${many ? ' tagged' : ''}`}
@@ -153,7 +153,7 @@ export default async function SlotsPage({ searchParams }: { searchParams: Promis
                   );
                 })}
                 {!past && (
-                  <Link className="slot-add" href={base({ date: d })} aria-label={`Ajouter un créneau le ${longDate(d)}`}>
+                  <Link prefetch={false} className="slot-add" href={base({ date: d })} aria-label={`Ajouter un créneau le ${longDate(d)}`}>
                     <IconPlus size={16} /> Ajouter
                   </Link>
                 )}

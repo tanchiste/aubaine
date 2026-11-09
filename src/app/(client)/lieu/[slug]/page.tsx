@@ -2,14 +2,14 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { Deal, VenueArt } from '@/components/ui';
+import { Deal, VenueArt, photoSrc, photoSrcSet } from '@/components/ui';
 import { IconBack, IconChevronRight, IconClock, IconMinus, IconPin, IconPlus, IconUsers, IconX } from '@/components/icons';
 import { getCurrentUser, getMyVenues } from '@/lib/auth';
 import { CATEGORIES, catStyle } from '@/lib/categories';
 import { addDays, brusselsDate, brusselsHour, capitalize, dayChip, euros, isDateStr, longDate, timeLabel } from '@/lib/format';
 import { DAYS_AHEAD, MAX_DAYS, clientParams, withParams } from '@/lib/params';
 import { DatePicker } from '@/components/DatePicker';
-import { VenueMap } from '@/components/VenueMap';
+import { LazyMap } from '@/components/LazyMap';
 import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
 import { discounted, quote } from '@/lib/pricing';
 import { offersOf, photoList, unitsFor, venueBySlug, venueSlotsRange, type SlotView } from '@/lib/venues';
@@ -121,7 +121,16 @@ export default async function VenuePage({ params, searchParams }: Props) {
           {photos.length > 0 && (
             <div className="gallery" style={{ position: 'absolute', inset: 0 }}>
               {photos.map((ph, i) => (
-                <img key={ph.id} src={`/api/photos/${ph.id}`} alt={`${venue.name}, photo ${i + 1}`} />
+                <img
+                  key={ph.id}
+                  src={photoSrc(ph.id, 800)}
+                  srcSet={photoSrcSet(ph.id)}
+                  sizes="(max-width: 899px) 100vw, 760px"
+                  alt={`${venue.name}, photo ${i + 1}`}
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                  fetchPriority={i === 0 ? 'high' : undefined}
+                  decoding="async"
+                />
               ))}
             </div>
           )}
@@ -174,7 +183,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
         )}
         {located && (
           <div className="map-card">
-            <VenueMap single className="mini" me={me} pins={[{ id: venue.id, lat: located.lat, lng: located.lng, name: venue.name, pct: firstFree?.discountPct ?? venue.baseDiscountPct, line: '', href: '#creneaux' }]} />
+            <LazyMap single className="mini" me={me} pins={[{ id: venue.id, lat: located.lat, lng: located.lng, name: venue.name, pct: firstFree?.discountPct ?? venue.baseDiscountPct, line: '', href: '#creneaux' }]} />
             <a className="btn btn-sm" href={`https://www.google.com/maps/dir/?api=1&destination=${located.lat},${located.lng}`} target="_blank" rel="noreferrer">
               Itinéraire{km !== null ? ` · ${distanceLabel(km)}` : ''}
             </a>
@@ -194,7 +203,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
         {offerList.length > 1 && (
           <nav className="offer-tabs" aria-label="Choisir la prestation">
             {offerList.map((o) => (
-              <Link key={o.id} href={withParams(`/lieu/${slug}`, base, { offre: o.id, slot: undefined })} aria-current={offer?.id === o.id ? 'true' : undefined} scroll={false}>
+              <Link prefetch={false} key={o.id} href={withParams(`/lieu/${slug}`, base, { offre: o.id, slot: undefined })} aria-current={offer?.id === o.id ? 'true' : undefined} scroll={false}>
                 <b>{o.name}</b>
                 <span>{o.durationMin} min · {euros(o.priceCents)} {o.priceUnit === 'session' ? 'la séance' : '/ pers.'}</span>
               </Link>
@@ -203,7 +212,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
         )}
         <div className="days-wrap">
           {prevStart ? (
-            <Link className="days-arrow" href={weekHref(prevStart)} aria-label="7 jours précédents" scroll={false}>
+            <Link prefetch={false} className="days-arrow" href={weekHref(prevStart)} aria-label="7 jours précédents" scroll={false}>
               <IconBack size={18} />
             </Link>
           ) : (
@@ -214,23 +223,23 @@ export default async function VenuePage({ params, searchParams }: Props) {
               const c = dayChip(d, p.today);
               const sum = daySummary(d);
               return (
-                <Link
+                <Link prefetch={false}
                   key={d}
                   className={`day${sum.count ? '' : ' none'}`}
                   href={withParams(`/lieu/${slug}`, base, { date: d === p.today ? undefined : d })}
                   aria-current={d === p.date ? 'true' : undefined}
-                  aria-label={`${capitalize(longDate(d))} : ${sum.count ? `${sum.count} créneau${sum.count > 1 ? 'x' : ''} libre${sum.count > 1 ? 's' : ''}, jusqu’à −${sum.best} %` : 'complet ou fermé'}`}
                   scroll={false}
                 >
                   <span>{c.top}</span>
                   <b>{c.num}</b>
                   <em>{sum.count ? `−${sum.best} %` : '–'}</em>
+                  <span className="sr-only">{`, ${longDate(d)} : ${sum.count ? `${sum.count} créneau${sum.count > 1 ? 'x' : ''} libre${sum.count > 1 ? 's' : ''}, jusqu’à −${sum.best} %` : 'complet ou fermé'}`}</span>
                 </Link>
               );
             })}
           </nav>
           {nextStart ? (
-            <Link className="days-arrow" href={weekHref(nextStart)} aria-label="7 jours suivants" scroll={false}>
+            <Link prefetch={false} className="days-arrow" href={weekHref(nextStart)} aria-label="7 jours suivants" scroll={false}>
               <IconChevronRight size={18} />
             </Link>
           ) : (
@@ -240,11 +249,11 @@ export default async function VenuePage({ params, searchParams }: Props) {
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="label">Personnes</span>
           <div className="stepper">
-            <Link href={withParams(`/lieu/${slug}`, base, { n: n - 1, slot: selected?.id })} aria-label="Une personne de moins" aria-disabled={!offer || n <= offer.groupMin ? 'true' : undefined} scroll={false}>
+            <Link prefetch={false} href={withParams(`/lieu/${slug}`, base, { n: n - 1, slot: selected?.id })} aria-label="Une personne de moins" aria-disabled={!offer || n <= offer.groupMin ? 'true' : undefined} scroll={false}>
               <IconMinus size={16} strokeWidth={2} />
             </Link>
             <b>{n}</b>
-            <Link href={withParams(`/lieu/${slug}`, base, { n: n + 1, slot: selected?.id })} aria-label="Une personne de plus" aria-disabled={!offer || n >= offer.groupMax ? 'true' : undefined} scroll={false}>
+            <Link prefetch={false} href={withParams(`/lieu/${slug}`, base, { n: n + 1, slot: selected?.id })} aria-label="Une personne de plus" aria-disabled={!offer || n >= offer.groupMax ? 'true' : undefined} scroll={false}>
               <IconPlus size={16} strokeWidth={2} />
             </Link>
           </div>
@@ -259,7 +268,7 @@ export default async function VenuePage({ params, searchParams }: Props) {
         </div>
         {range && (
           <div className="active-filters">
-            <Link className="filter-pill" href={withParams(`/lieu/${slug}`, base, { moment: undefined, de: undefined, a: undefined, slot: selected?.id })} aria-label={`Retirer le filtre ${range.label}`}>
+            <Link prefetch={false} className="filter-pill" href={withParams(`/lieu/${slug}`, base, { moment: undefined, de: undefined, a: undefined, slot: selected?.id })} aria-label={`Retirer le filtre ${range.label}`}>
               {range.label} <IconX size={12} />
             </Link>
             {shown.length < slots.length && <span className="small muted">{slots.length - shown.length} autre{slots.length - shown.length > 1 ? 's' : ''} créneau{slots.length - shown.length > 1 ? 'x' : ''} dans la journée</span>}
@@ -269,9 +278,9 @@ export default async function VenuePage({ params, searchParams }: Props) {
           <div className="empty card">
             <b>{slots.length > 0 && range ? p.moment ? `Pas de créneau libre le ${range.label.toLowerCase()} ce jour-là` : `Pas de créneau libre entre ${range.from} h et ${range.to} h ce jour-là` : 'Pas de créneau libre ce jour-là'}</b>
             {slots.length > 0 && range ? (
-              <Link className="btn btn-sm" href={withParams(`/lieu/${slug}`, base, { moment: undefined, de: undefined, a: undefined })}>Voir toute la journée</Link>
+              <Link prefetch={false} className="btn btn-sm" href={withParams(`/lieu/${slug}`, base, { moment: undefined, de: undefined, a: undefined })}>Voir toute la journée</Link>
             ) : nextFree ? (
-              <Link className="btn btn-sm btn-primary" href={withParams(`/lieu/${slug}`, base, { date: brusselsDate(nextFree.startsAt), slot: nextFree.id })} scroll={false}>
+              <Link prefetch={false} className="btn btn-sm btn-primary" href={withParams(`/lieu/${slug}`, base, { date: brusselsDate(nextFree.startsAt), slot: nextFree.id })} scroll={false}>
                 Prochain : {whenLabel(nextFree)}
               </Link>
             ) : (
@@ -279,14 +288,13 @@ export default async function VenuePage({ params, searchParams }: Props) {
             )}
           </div>
         ) : (
-          <div className="slots" role="list">
+          <div className="slots">
             {shown.map((s) => {
               const full = s.remaining < need;
               const boost = s.discountPct > venue.baseDiscountPct;
               return (
-                <Link
+                <Link prefetch={false}
                   key={s.id}
-                  role="listitem"
                   className={`slot${boost ? ' boost' : ''}${full ? ' full' : ''}`}
                   href={withParams(`/lieu/${slug}`, base, { slot: s.id })}
                   aria-current={selected?.id === s.id ? 'true' : undefined}

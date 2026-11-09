@@ -6,13 +6,22 @@ import { LogoMark, LogoMarkLight } from './icons';
 
 export function Logo({ dark = false, href = '/', suffix }: { dark?: boolean; href?: string; suffix?: ReactNode }) {
   return (
-    <Link href={href} className={`logo${dark ? ' on-dark' : ''}`} aria-label="Aubaine, accueil">
+    <Link href={href} className={`logo${dark ? ' on-dark' : ''}`} aria-label={suffix ? undefined : 'Aubaine, accueil'}>
       {dark ? <LogoMarkLight /> : <LogoMark />}
       <span>aubaine</span>
       {suffix}
     </Link>
   );
 }
+
+/** Adresse d'une photo à une largeur donnée (160, 480, 800 ou 1200 px, en WebP) */
+export const photoSrc = (id: string, w: 160 | 480 | 800 | 1200) => `/api/photos/${id}?w=${w}`;
+
+/** Jeu de largeurs pour srcset : le navigateur prend la plus petite qui reste nette */
+export const photoSrcSet = (id: string, widths: (160 | 480 | 800 | 1200)[] = [480, 800, 1200]) => widths.map((w) => `${photoSrc(id, w)} ${w}w`).join(', ');
+
+/** Taille affichée par défaut : cartes pleine largeur sur mobile, 2 ou 3 colonnes au-delà */
+const CARD_SIZES = '(max-width: 699px) 92vw, 380px';
 
 /** Première photo de l'établissement, ou illustration de couleur si aucune photo */
 export function VenueArt({
@@ -23,6 +32,8 @@ export function VenueArt({
   children,
   alt = '',
   category,
+  sizes = CARD_SIZES,
+  priority = false,
 }: {
   color: string;
   photoId?: string | null;
@@ -32,10 +43,27 @@ export function VenueArt({
   style?: CSSProperties;
   children?: ReactNode;
   alt?: string;
+  /** largeur affichée, pour que le navigateur choisisse la bonne taille (« 64px » pour une vignette) */
+  sizes?: string;
+  /** première image visible : chargée tout de suite, en priorité */
+  priority?: boolean;
 }) {
+  const thumb = className.includes('swatch') || (/^\d+px$/.test(sizes) && parseInt(sizes) <= 80);
   return (
     <div className={`art ${className}`} style={{ ['--c' as string]: color, ...style }}>
-      {photoId ? <img src={`/api/photos/${photoId}`} alt={alt} loading="lazy" /> : category ? <Pictogram category={category} size={128} /> : null}
+      {photoId ? (
+        <img
+          src={photoSrc(photoId, thumb ? 160 : 800)}
+          srcSet={thumb ? undefined : photoSrcSet(photoId)}
+          sizes={thumb ? undefined : sizes}
+          alt={alt}
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : undefined}
+          decoding="async"
+        />
+      ) : category ? (
+        <Pictogram category={category} size={128} />
+      ) : null}
       {children}
     </div>
   );

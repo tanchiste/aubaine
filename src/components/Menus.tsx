@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { startNavigation } from './NavProgress';
 import { IconCheck, IconChevronDown, IconClock } from './icons';
 
 /** Ouvre / ferme un menu, et le referme au clic à côté ou avec Échap */
@@ -42,7 +43,7 @@ export function TimeMenu({ label, shortLabel, presets, de, preciseHref, pill = f
       {open && (
         <div className="picker-menu menu-time" role="dialog" aria-label="Horaire">
           {presets.map((p) => (
-            <Link scroll={false} key={p.key} href={p.href} aria-selected={p.active} onClick={() => setOpen(false)}>
+            <Link prefetch={false} scroll={false} key={p.key} href={p.href} aria-selected={p.active} onClick={() => setOpen(false)}>
               <span className="grow">{p.label}</span>
               <span className="small muted">{p.hint}</span>
               {p.active && <IconCheck size={16} />}
@@ -57,6 +58,7 @@ export function TimeMenu({ label, shortLabel, presets, de, preciseHref, pill = f
               onChange={(e) => {
                 const h = Number(e.target.value);
                 setOpen(false);
+                startNavigation();
                 router.push(preciseHref.replace('__DE__', String(h)).replace('__A__', String(Math.min(24, h + 2))), { scroll: false });
               }}
             >
@@ -84,7 +86,7 @@ export function SortMenu({ options }: { options: { key: string; label: string; h
       {open && (
         <div className="picker-menu" role="listbox" aria-label="Trier">
           {options.map((o) => (
-            <Link scroll={false} key={o.key} role="option" href={o.href} aria-selected={o.active} onClick={() => setOpen(false)}>
+            <Link prefetch={false} scroll={false} key={o.key} role="option" href={o.href} aria-selected={o.active} onClick={() => setOpen(false)}>
               <span className="grow">{o.label}</span>
               {o.active && <IconCheck size={16} />}
             </Link>
@@ -121,14 +123,14 @@ export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pick
       </button>
       {open && (
         <div className="picker-menu qmenu" role="dialog" aria-label="Jour">
-          <Link scroll={false} href={todayHref} aria-selected={isToday} onClick={() => setOpen(false)}>
+          <Link prefetch={false} scroll={false} href={todayHref} aria-selected={isToday} onClick={() => setOpen(false)}>
             <span className="grow qmenu-day">
               Aujourd’hui
               {todayInfo && <small className={todayInfo === 'aucun créneau' ? 'none' : ''}>{todayInfo}</small>}
             </span>
             {isToday && <IconCheck size={16} />}
           </Link>
-          <Link scroll={false} href={tomorrowHref} aria-selected={isTomorrow} onClick={() => setOpen(false)}>
+          <Link prefetch={false} scroll={false} href={tomorrowHref} aria-selected={isTomorrow} onClick={() => setOpen(false)}>
             <span className="grow qmenu-day">
               Demain
               {tomorrowInfo && <small className={tomorrowInfo === 'aucun créneau' ? 'none' : ''}>{tomorrowInfo}</small>}
@@ -150,6 +152,7 @@ export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pick
             onChange={(e) => {
               if (!e.target.value) return;
               setOpen(false);
+              startNavigation();
               router.push(pickHref.replace('__DATE__', e.target.value), { scroll: false });
             }}
           />
@@ -179,7 +182,7 @@ export function PeopleMenu({ n, hrefs, tool = false }: { n: number; hrefs: strin
           <span className="label">Combien de personnes ?</span>
           <div className="people-grid">
             {hrefs.map((href, i) => (
-              <Link scroll={false} key={href} href={href} aria-current={i + 1 === n ? 'true' : undefined} onClick={() => setOpen(false)}>
+              <Link prefetch={false} scroll={false} key={href} href={href} aria-current={i + 1 === n ? 'true' : undefined} onClick={() => setOpen(false)}>
                 {i + 1}
               </Link>
             ))}

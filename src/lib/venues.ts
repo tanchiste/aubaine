@@ -1,5 +1,6 @@
 import 'server-only';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { cache } from 'react';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { offers, venuePhotos, venues, type Offer, type Venue, type VenueCategory } from '@/db/schema';
 import { MAX_DISCOUNT, MIN_DISCOUNT, discounted } from './pricing';
@@ -69,9 +70,26 @@ function toSlot(r: SlotRow): SlotView {
   };
 }
 
-/** Créneaux à venir d'une journée (heure de Bruxelles), pour des établissements en ligne */
-async function slotsForDay(date: string, venueIds?: string[]): Promise<SlotRow[]> {
-  if (venueIds && venueIds.length === 0) return [];
+/*
+ * Lectures mises en commun pendant l'affichage d'une page (cache de React, le temps d'une requête) :
+ * Explorer appelle plusieurs fonctions qui ont besoin des mêmes lieux, photos et créneaux du jour.
+ */
+
+/** Tous les établissements en ligne */
+const allPublished = cache(async (): Promise<Venue[]> => db.select().from(venues).where(eq(venues.status, 'published')));
+
+/** Première photo de chaque établissement en ligne */
+const publishedCovers = cache(async (): Promise<Map<string, string>> => {
+  const rows = await db.execute<{ venue_id: string; id: string }>(sql`
+    select distinct on (p.venue_id) p.venue_id, p.id
+    from venue_photos p join venues v on v.id = p.venue_id
+    where v.status = 'published'
+    order by p.venue_id, p.position, p.created_at`);
+  return new Map([...rows].map((r) => [r.venue_id, r.id]));
+});
+
+/** Créneaux ouverts à venir d'une journée (heure de Bruxelles), tous établissements en ligne confondus */
+const daySlots = cache(async (date: string): Promise<SlotRow[]> => {
   const rows = await db.execute<SlotRow>(sql`
     select ${SLOT_COLS}
     from slots s
@@ -80,9 +98,17 @@ async function slotsForDay(date: string, venueIds?: string[]): Promise<SlotRow[]
     where v.status = 'published' and s.is_open and o.is_active
       and s.starts_at > now()
       and s.starts_at >= ${dayStart(date)} and s.starts_at < ${dayEnd(date)}
-      ${venueIds ? sql`and s.venue_id in (${sql.join(venueIds.map((id) => sql`${id}::uuid`), sql`, `)})` : sql``}
     order by s.starts_at`);
   return [...rows];
+});
+
+/** Créneaux à venir d'une journée, éventuellement limités à quelques établissements */
+async function slotsForDay(date: string, venueIds?: string[]): Promise<SlotRow[]> {
+  if (venueIds && venueIds.length === 0) return [];
+  const rows = await daySlots(date);
+  if (!venueIds) return rows;
+  const keep = new Set(venueIds);
+  return rows.filter((r) => keep.has(r.venue_id));
 }
 
 /** Première photo de chaque établissement */
@@ -109,18 +135,15 @@ type Filters = { people: number; category?: VenueCategory; q?: string; city?: st
 
 /** Établissements en ligne qui correspondent aux filtres et acceptent ce nombre de personnes */
 async function publishedVenues(f: Filters) {
-  const conds = [eq(venues.status, 'published')];
-  if (f.category) conds.push(eq(venues.category, f.category));
-  if (f.city) conds.push(sql`lower(${venues.city}) = lower(${f.city})`);
-  const list = await db.select().from(venues).where(and(...conds));
-  // Recherche en mémoire : sans accents, sur le nom, le type d'activité, la ville et la description.
-  // La taille du groupe se vérifie créneau par créneau (chaque prestation a la sienne).
-  return list.filter((v) => !f.q || matchVenue(v, f.q));
+  const city = f.city?.toLowerCase();
+  // Filtres en mémoire (une seule lecture des lieux par page) ; recherche sans accents, sur le nom,
+  // le type d'activité, la ville et la description. La taille du groupe se vérifie créneau par créneau.
+  return (await allPublished()).filter((v) => (!f.category || v.category === f.category) && (!city || v.city.toLowerCase() === city) && (!f.q || matchVenue(v, f.q)));
 }
 
 /** Établissements en ligne qui correspondent à une recherche, avec leur prochain créneau et leur meilleure remise sur 7 jours */
 export async function searchVenues(q: string, opts: { people?: number; city?: string; limit?: number } = {}) {
-  const list = (await db.select().from(venues).where(eq(venues.status, 'published')))
+  const list = (await allPublished())
     .filter((v) => matchVenue(v, q))
     .filter((v) => !opts.city || v.city.toLowerCase() === opts.city.toLowerCase());
   if (list.length === 0) return [];
@@ -132,7 +155,7 @@ export async function searchVenues(q: string, opts: { people?: number; city?: st
         (select max(s.discount_pct) from slots s where s.venue_id = v.id and s.is_open and s.starts_at > now()
            and s.starts_at < now() + interval '7 days') as best
       from venues v where v.id in (${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)})`),
-    firstPhotos(ids),
+    publishedCovers(),
   ]);
   // Les lieux qui ont des créneaux à venir d'abord, puis les plus grosses remises.
   return list
@@ -191,7 +214,7 @@ export async function explorer(opts: Filters & { date: string; hours?: HourRange
       opts.date,
       fit.map((v) => v.id),
     ),
-    firstPhotos(fit.map((v) => v.id)),
+    publishedCovers(),
   ]);
   const range = opts.hours ?? null;
 
@@ -229,7 +252,7 @@ export type Deal = { venue: Venue; photoId: string | null; slot: SlotView };
 export async function bestDeals(f: Filters & { today: string; hours?: HourRange; limit?: number }): Promise<Deal[]> {
   const fit = await publishedVenues(f);
   if (fit.length === 0) return [];
-  const rows = await db.execute<SlotRow>(sql`
+  const [rows, photos] = await Promise.all([db.execute<SlotRow>(sql`
     select ${SLOT_COLS}
     from slots s
     join offers o on o.id = s.offer_id
@@ -241,8 +264,7 @@ export async function bestDeals(f: Filters & { today: string; hours?: HourRange;
         fit.map((v) => sql`${v.id}::uuid`),
         sql`, `,
       )})
-    order by s.discount_pct desc, s.starts_at asc`);
-  const photos = await firstPhotos(fit.map((v) => v.id));
+    order by s.discount_pct desc, s.starts_at asc`), publishedCovers()]);
   const out: Deal[] = [];
   for (const r of rows) {
     if (out.some((d) => d.venue.id === r.venue_id)) continue;
@@ -257,13 +279,9 @@ export async function bestDeals(f: Filters & { today: string; hours?: HourRange;
 
 /** Communes où au moins un établissement est en ligne */
 export async function cities(): Promise<{ city: string; n: number }[]> {
-  const rows = await db
-    .select({ city: venues.city, n: sql<number>`count(*)::int` })
-    .from(venues)
-    .where(eq(venues.status, 'published'))
-    .groupBy(venues.city)
-    .orderBy(sql`count(*) desc`, venues.city);
-  return rows;
+  const count = new Map<string, number>();
+  for (const v of await allPublished()) count.set(v.city, (count.get(v.city) ?? 0) + 1);
+  return [...count].map(([city, n]) => ({ city, n })).sort((a, b) => b.n - a.n || a.city.localeCompare(b.city, 'fr'));
 }
 
 /** Créneaux du jour qui démarrent dans les 3 prochaines heures */
@@ -271,10 +289,8 @@ export async function lastMinute(today: string, people: number, city?: string) {
   const rows = (await slotsForDay(today)).filter((r) => new Date(r.starts_at).getTime() - Date.now() < 3 * 3_600_000);
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.venue_id))];
-  const [list, photos] = await Promise.all([
-    db.select().from(venues).where(inArray(venues.id, ids)),
-    firstPhotos(ids),
-  ]);
+  const keep = new Set(ids);
+  const [list, photos] = await Promise.all([allPublished().then((all) => all.filter((v) => keep.has(v.id))), publishedCovers()]);
   const out: { venue: Venue; photoId: string | null; slot: SlotView }[] = [];
   for (const r of rows) {
     const v = list.find((x) => x.id === r.venue_id)!;

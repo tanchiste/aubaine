@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { startNavigation } from './NavProgress';
 import { IconCheck, IconChevronDown, IconCompass, IconPin } from './icons';
 
 type City = { city: string; n: number };
@@ -47,6 +48,7 @@ export function CityPicker({ cities, current, near = false, hasPos = false, href
         remember('proche');
         setBusy(false);
         setOpen(false);
+        startNavigation();
         router.push(hrefFor.proche, { scroll: false });
         router.refresh();
       },
@@ -62,6 +64,7 @@ export function CityPicker({ cities, current, near = false, hasPos = false, href
     document.cookie = 'aub_pos=; path=/; max-age=0; samesite=lax';
     remember('tout');
     setOpen(false);
+    startNavigation();
     router.push(hrefFor.tout, { scroll: false });
     router.refresh();
   };
@@ -82,7 +85,7 @@ export function CityPicker({ cities, current, near = false, hasPos = false, href
             {near && <IconCheck size={16} />}
           </button>
           {error && <p className="picker-error" role="alert">{error}</p>}
-          <Link scroll={false} role="option" aria-selected={!current && !near} href={hrefFor['tout']} onClick={() => { remember('tout'); setOpen(false); }}>
+          <Link prefetch={false} scroll={false} role="option" aria-selected={!current && !near} href={hrefFor['tout']} onClick={() => { remember('tout'); setOpen(false); }}>
             <span className="grow">Tout le Hainaut</span>
             <span className="small muted">{total}</span>
             {!current && !near && <IconCheck size={16} />}
@@ -90,7 +93,7 @@ export function CityPicker({ cities, current, near = false, hasPos = false, href
           {cities.map((c) => {
             const active = !near && current?.toLowerCase() === c.city.toLowerCase();
             return (
-              <Link scroll={false} key={c.city} role="option" aria-selected={active} href={hrefFor[c.city]} onClick={() => { remember(c.city); setOpen(false); }}>
+              <Link prefetch={false} scroll={false} key={c.city} role="option" aria-selected={active} href={hrefFor[c.city]} onClick={() => { remember(c.city); setOpen(false); }}>
                 <span className="grow">{c.city}</span>
                 <span className="small muted">{c.n}</span>
                 {active && <IconCheck size={16} />}

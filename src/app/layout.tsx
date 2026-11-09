@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from 'next';
+import localFont from 'next/font/local';
+import { Suspense } from 'react';
+import { NavProgress } from '@/components/NavProgress';
 import './globals.css';
 
 export const dynamic = 'force-dynamic';
+
+// Polices servies par l'app elle-même (préchargées, sans aller-retour vers Google Fonts)
+const figtree = localFont({ src: '../fonts/figtree-latin-wght-normal.woff2', weight: '300 900', variable: '--font-figtree', display: 'swap' });
+const unbounded = localFont({ src: '../fonts/unbounded-latin-wght-normal.woff2', weight: '200 900', variable: '--font-unbounded', display: 'swap' });
 
 export const metadata: Metadata = {
   title: { default: 'Aubaine · Les loisirs à prix creux', template: '%s · Aubaine' },
@@ -13,17 +20,13 @@ export const viewport: Viewport = { themeColor: '#F1F0F6', width: 'device-width'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Unbounded:wght@500;600;700&display=swap"
-        />
-      </head>
-      <body>{children}</body>
+    <html lang="fr" className={`${figtree.variable} ${unbounded.variable}`}>
+      <body>
+        <Suspense fallback={null}>
+          <NavProgress />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }

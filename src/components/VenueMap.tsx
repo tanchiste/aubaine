@@ -2,6 +2,7 @@
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { startNavigation } from './NavProgress';
 import type { Map as LMap } from 'leaflet';
 import { distanceKm } from '@/lib/geo';
 
@@ -63,7 +64,10 @@ export function VenueMap({ pins, me, single = false, className }: { pins: MapPin
       for (const p of pins) {
         const icon = L.divIcon({ className: 'map-pin', html: `<span>−${Math.round(p.pct)} %</span>`, iconSize: [64, 32], iconAnchor: [32, 32] });
         const m = L.marker([p.lat, p.lng], { icon, title: p.name, riseOnHover: true }).addTo(map);
-        if (!single) m.bindPopup(popupNode(p, (href) => router.push(href)), { closeButton: false, offset: [0, -28] });
+        if (!single) m.bindPopup(popupNode(p, (href) => {
+          startNavigation();
+          router.push(href);
+        }), { closeButton: false, offset: [0, -28] });
         if (framed.has(p.id)) points.push([p.lat, p.lng]);
       }
       if (me) {

@@ -1,6 +1,7 @@
 'use client';
 import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { startNavigation } from './NavProgress';
 
 /** Bouton « Autre date » qui ouvre le calendrier natif du téléphone ou de l'ordinateur */
 export function DatePicker({ value, min, max, hrefBase, label = 'Autre date', pill = false, active = false }: { value: string; min: string; max: string; hrefBase: string; label?: string; pill?: boolean; active?: boolean }) {
@@ -37,7 +38,10 @@ export function DatePicker({ value, min, max, hrefBase, label = 'Autre date', pi
         defaultValue={value}
         onChange={(e) => {
           const d = e.target.value;
-          if (d) router.push(hrefBase.replace('__DATE__', d), { scroll: false });
+          if (d) {
+            startNavigation();
+            router.push(hrefBase.replace('__DATE__', d), { scroll: false });
+          }
         }}
       />
     </span>

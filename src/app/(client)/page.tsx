@@ -6,10 +6,10 @@ import { Deal, Logo, VenueArt } from '@/components/ui';
 import { HeroDial } from '@/components/brand';
 import { IconBolt, IconChevronRight, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
-import { VenueMap, type MapPin } from '@/components/VenueMap';
+import { LazyMap, type MapPin } from '@/components/LazyMap';
 import { DateMenu, PeopleMenu, SortMenu, TimeMenu } from '@/components/Menus';
 import { CATEGORIES, CATEGORY_KEYS, catStyle } from '@/lib/categories';
-import { addDays, brusselsDate, capitalize, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
+import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
 import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
@@ -211,17 +211,18 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                 const a = availOf(d);
                 return (
                   <Link
+                    prefetch={false}
                     scroll={false}
                     key={d}
                     className={`day${a ? '' : ' none'}`}
                     href={d === extraDay ? withParams('/', base) : withParams('/', base, { date: d === today ? undefined : d })}
                     aria-current={d === date ? 'true' : undefined}
                     title={a ? `${a.venues} lieu${a.venues > 1 ? 'x' : ''}, ${a.slots} créneau${a.slots > 1 ? 'x' : ''}, jusqu’à −${a.best} %` : 'Aucun créneau avec ces filtres'}
-                    aria-label={`${capitalize(longDate(d))} : ${availLabel(d)}`}
                   >
                     <span>{c.top}</span>
                     <b>{c.num}</b>
                     <em>{a ? `−${a.best} %` : '–'}</em>
+                    <span className="sr-only">{`, ${longDate(d)} : ${availLabel(d)}`}</span>
                   </Link>
                 );
               })}
@@ -247,17 +248,17 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
 
         <div className="cats-row">
           <nav className="chips" aria-label="Catégories">
-            <Link scroll={false} className="chip chip-all" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
+            <Link prefetch={false} scroll={false} className="chip chip-all" href={withParams('/', { ...base, q: undefined }, { cat: undefined })} aria-current={!category && !q ? 'true' : undefined}>
               Tout
             </Link>
             {CATEGORY_KEYS.filter((k) => k !== 'autre').map((k) => (
-              <Link scroll={false} key={k} className="chip cat-chip" style={catStyle(k)} href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
+              <Link prefetch={false} scroll={false} key={k} className="chip cat-chip" style={catStyle(k)} href={withParams('/', { ...base, q: undefined }, { cat: k })} aria-current={category === k ? 'true' : undefined}>
                 {CATEGORIES[k].short}
               </Link>
             ))}
           </nav>
           {anyFilter && (
-            <Link scroll={false} className="reset-link" href={withParams('/', { ville: base.ville, date: base.date })}>
+            <Link prefetch={false} scroll={false} className="reset-link" href={withParams('/', { ville: base.ville, date: base.date })}>
               Réinitialiser
             </Link>
           )}
@@ -274,12 +275,12 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
             <span className="small muted">7 prochains jours{hours ? `, ${moment ? hours.label.toLowerCase() : hours.label}` : ''}{city ? `, ${city}` : ''}</span>
           </div>
           <div className="deals">
-            {deals.map(({ venue, photoId, slot }) => {
+            {deals.map(({ venue, photoId, slot }, i) => {
               const d = brusselsDate(slot.startsAt);
               const unit = discounted(slot.offer.priceCents, slot.discountPct);
               return (
                 <Link key={venue.id} className="deal-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: d === today ? undefined : d, slot: slot.id })}>
-                  <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category}>
+                  <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category} sizes="240px" priority={i < 2}>
                     <Deal pct={slot.discountPct} />
                     <span className="cat-tag" style={catStyle(venue.category)}>{CATEGORIES[venue.category].short}</span>
                   </VenueArt>
@@ -316,7 +317,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           <div className="last-minute">
             {lm.map(({ venue, photoId, slot }) => (
               <Link key={venue.id} className="lm-card" href={withParams(`/lieu/${venue.slug}`, { n: base.n, slot: slot.id })}>
-                <VenueArt color={venue.color} photoId={photoId} />
+                <VenueArt color={venue.color} photoId={photoId} sizes="52px" />
                 <span className="grow stack" style={{ ['--gap' as string]: '2px' }}>
                   <b style={{ fontSize: 14 }}>{venue.name}</b>
                   <span className="small muted">
@@ -340,8 +341,8 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           </h2>
           <div className="row" style={{ ['--gap' as string]: '10px' }}>
             <nav className="view-toggle" aria-label="Affichage">
-              <Link scroll={false} href={withParams('/', base, { vue: undefined })} aria-current={!mapView ? 'true' : undefined}>Liste</Link>
-              <Link scroll={false} href={withParams('/', base, { vue: 'carte' })} aria-current={mapView ? 'true' : undefined}>Carte</Link>
+              <Link prefetch={false} scroll={false} href={withParams('/', base, { vue: undefined })} aria-current={!mapView ? 'true' : undefined}>Liste</Link>
+              <Link prefetch={false} scroll={false} href={withParams('/', base, { vue: 'carte' })} aria-current={mapView ? 'true' : undefined}>Carte</Link>
             </nav>
             <SortMenu
               options={(Object.keys(SORTS) as Sort[])
@@ -360,7 +361,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                 <p className="small">Essaie plutôt :</p>
                 <div className="fixes">
                   {fixes.map((f) => (
-                    <Link key={f.key} className="fix" href={f.href}>
+                    <Link prefetch={false} key={f.key} className="fix" href={f.href}>
                       <span className="grow">{f.label}</span>
                       <span className="small muted">{f.n} lieu{f.n > 1 ? 'x' : ''}</span>
                       <IconChevronRight size={16} />
@@ -374,12 +375,12 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
           </div>
         ) : mapView ? (
           <div className="map-wrap">
-            <VenueMap pins={pins} me={pos} />
+            <LazyMap pins={pins} me={pos} />
             {pins.length < items.length && <p className="small muted">{items.length - pins.length} lieu{items.length - pins.length > 1 ? 'x' : ''} pas encore placé{items.length - pins.length > 1 ? 's' : ''} sur la carte.</p>}
           </div>
         ) : (
           <div className="venue-grid">
-            {items.map(({ venue, photoId, slots }) => {
+            {items.map(({ venue, photoId, slots }, i) => {
               const best = Math.max(...slots.map((s) => s.discountPct));
               const from = minPrice(slots);
               const cheapest = slots.reduce((m, s) => (discounted(s.offer.priceCents, s.discountPct) < discounted(m.offer.priceCents, m.discountPct) ? s : m));
@@ -388,7 +389,7 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
               return (
                 <article key={venue.id} className="venue-card">
                   <Link className="venue-link" href={link}>
-                    <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category}>
+                    <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category} priority={deals.length === 0 && i === 0}>
                       <Deal pct={best} />
                       <span className="cat-tag" style={catStyle(venue.category)}>{CATEGORIES[venue.category].short}</span>
                     </VenueArt>
@@ -416,12 +417,12 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
                   </Link>
                   <div className="mini-slots" style={{ padding: '0 14px 14px' }}>
                     {shown.map((s) => (
-                      <Link key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
+                      <Link prefetch={false} key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
                         {timeLabel(s.startsAt)} <em>−{s.discountPct} %</em>
                       </Link>
                     ))}
                     {slots.length > shown.length && (
-                      <Link className="mini-slot" href={link}>
+                      <Link prefetch={false} className="mini-slot" href={link}>
                         +{slots.length - shown.length}
                       </Link>
                     )}

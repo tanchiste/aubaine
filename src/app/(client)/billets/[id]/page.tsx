@@ -9,7 +9,8 @@ import { paymentLabel } from '@/lib/email';
 import { ShareButton } from './ShareButton';
 import { cancelAction } from '../actions';
 
-export const metadata = { title: 'Billet' };
+// Lien partageable avec le groupe, mais jamais indexé par les moteurs de recherche
+export const metadata = { title: 'Billet', robots: { index: false, follow: false } };
 
 export default async function TicketPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ nouveau?: string; erreur?: string }> }) {
   const row = await getBooking((await params).id);

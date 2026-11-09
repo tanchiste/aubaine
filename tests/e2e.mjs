@@ -15,20 +15,25 @@ const ok = (cond, msg) => {
   if (!cond) throw new Error('ÉCHEC : ' + msg);
   console.log('✓', msg);
 };
+/** L'adresse change dès l'affichage du squelette de chargement : on attend la vraie page */
+const settled = (page) => page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, { timeout: 15000 });
 
 async function login(page, email, next) {
   await page.goto(`${BASE}/connexion?suite=${encodeURIComponent(next)}`);
+  await settled(page);
   await page.fill('input[name=email]', email);
   await page.click('button:has-text("Recevoir mon code")');
   const code = (await page.locator('[data-testid=dev-code] b').textContent()).trim();
   await page.fill('input[name=code]', code);
   await page.click('button:has-text("Me connecter")');
   await page.waitForURL((u) => !u.pathname.startsWith('/connexion'));
+  await settled(page);
 }
 
 /** Inscription : type de compte, prénom, email (et établissement pour un exploitant), puis code */
 async function signup(page, { kind, firstName, email, venue, next }) {
   await page.goto(`${BASE}/inscription?type=${kind}${next ? `&suite=${encodeURIComponent(next)}` : ''}`);
+  await settled(page);
   await page.fill('input[name=firstName]', firstName);
   await page.fill('input[name=email]', email);
   if (venue) {
@@ -40,6 +45,7 @@ async function signup(page, { kind, firstName, email, venue, next }) {
   await page.fill('input[name=code]', code);
   await page.click('button:has-text("Créer mon compte")');
   await page.waitForURL((u) => !u.pathname.startsWith('/inscription'));
+  await settled(page);
 }
 
 const shot = async (page, name) => SHOTS && page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
@@ -49,6 +55,7 @@ try {
   // 1. Explorer
   const client = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await client.goto(BASE + '/');
+  await settled(client);
   ok((await client.locator('.venue-card').count()) > 0, 'Explorer affiche des établissements');
   await shot(client, '01-explorer');
   ok((await client.locator('.venue-card .cat-tag').count()) > 0, 'Chaque carte affiche son type d’activité');
@@ -70,18 +77,23 @@ try {
   await client.waitForSelector('.suggest a:has-text("Kart\'Ohm")');
   await client.press('input[aria-label="Rechercher une activité"]', 'Enter');
   await client.waitForURL(/q=karting/);
+  await settled(client);
   ok((await client.locator('text=Kart\'Ohm').count()) > 0, 'Rechercher « karting » affiche Kart’Ohm');
   await client.click('.chips a:has-text("Escape")');
   await client.waitForURL((u) => u.searchParams.get('cat') === 'escape');
+  await settled(client);
   ok(!new URL(client.url()).searchParams.get('q'), 'Choisir une catégorie remplace la recherche');
   await client.goto(BASE + '/?q=kart&cat=escape');
+  await settled(client);
   ok(await client.locator('.chips a[aria-current="true"]:has-text("Escape")').isVisible() && await client.locator('.reset-link').isVisible(), 'La catégorie active est visible, avec « Réinitialiser »');
   await client.click('.fix:has-text("dans toutes les activités")');
   await client.waitForURL((u) => !u.searchParams.get('cat'));
+  await settled(client);
   ok((await client.locator('text=Kart\'Ohm').count()) > 0, 'Page vide : une alternative en un clic retrouve Kart’Ohm');
   // Le moment de la journée s'applique aussi aux meilleurs deals et aux horaires de la liste
   for (const [m, from, to] of [['matin', 0, 12], ['aprem', 12, 18], ['soir', 18, 24]]) {
     await client.goto(`${BASE}/?ville=tout&moment=${m}`);
+    await settled(client);
     const texts = [...(await client.locator('.deal-card .deal-body .small').allTextContents()), ...(await client.locator('.venue-card .mini-slot').allTextContents())];
     const hours = texts.map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
     ok(hours.length > 0 && hours.every((h) => h >= from && h < to), `Filtre « ${m} » : uniquement des horaires entre ${from} h et ${to} h (${hours.length} vus)`);
@@ -89,10 +101,12 @@ try {
   // Heure précise (ordinateur) : « Vers 16 h » puis une plage 14 h – 16 h
   const dk = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await dk.goto(`${BASE}/?ville=tout`);
+  await settled(dk);
   await dk.click('.toolbar [data-menu=time]');
   ok((await dk.locator('.menu-time a').count()) === 4 && (await dk.locator('.menu-time select').count()) === 1, 'Menu Horaire simple : 4 moments et un seul choix « vers une heure »');
   await dk.selectOption('.menu-time select', '16');
   await dk.waitForURL((u) => u.searchParams.get('de') === '16' && u.searchParams.get('a') === '18');
+  await settled(dk);
   let hrs = [...(await dk.locator('.deal-card .deal-body .small').allTextContents()), ...(await dk.locator('.venue-card .mini-slot').allTextContents())]
     .map((t) => t.match(/(\d{2}):\d{2}/)).filter(Boolean).map((x) => Number(x[1]));
   ok(hrs.length > 0 && hrs.every((h) => h >= 16 && h < 18), `« Vers 16 h » : créneaux entre 16 h et 18 h (${hrs.length} vus)`);
@@ -100,33 +114,42 @@ try {
   await dk.click('.toolbar [data-menu=people]');
   await dk.click('.toolbar .people-grid a:has-text("5")');
   await dk.waitForURL((u) => u.searchParams.get('n') === '5');
+  await settled(dk);
   ok(await dk.locator('.toolbar [data-menu=people]:has-text("5 personnes")').isVisible(), 'Ordinateur : le nombre de personnes se choisit directement dans une grille');
   await dk.close();
 
   // Téléphone : une seule ligne de trois pastilles (jour, personnes, horaire)
   await client.goto(`${BASE}/?ville=tout`);
+  await settled(client);
   ok(!(await client.locator('.toolbar').isVisible()) && (await client.locator('.quickbar .qpill').count()) === 3, 'Téléphone : une seule ligne de trois pastilles');
   await client.click('.quickbar .qpill >> nth=1');
   await client.click('.people-grid a:has-text("3")');
   await client.waitForURL((u) => u.searchParams.get('n') === '3');
+  await settled(client);
   await client.click('.quickbar .qpill >> nth=2');
   await client.click('.menu-time a:has-text("Soir")');
   await client.waitForURL((u) => u.searchParams.get('moment') === 'soir' && u.searchParams.get('n') === '3');
+  await settled(client);
   await client.click('.quickbar .qpill >> nth=0');
   await client.click('.qmenu a:has-text("Demain")');
   await client.waitForURL((u) => !!u.searchParams.get('date'));
+  await settled(client);
   ok((await client.locator('.quickbar').textContent()).includes('Demain') && (await client.locator('.quickbar').textContent()).includes('Soir'), 'Pastilles : 3 personnes, soir et demain appliqués et affichés');
   // Prochain jour de semaine (les créneaux du matin d'aujourd'hui sont peut-être déjà passés)
   let wd = new Date(Date.now() + 86_400_000);
   while ([0, 6].includes(wd.getUTCDay())) wd = new Date(wd.getTime() + 86_400_000);
   await client.goto(`${BASE}/lieu/bulle-d-o?moment=matin&date=${wd.toISOString().slice(0, 10)}`);
+  await settled(client);
   const ficheHours = (await client.locator('.slot b').allTextContents()).map((t) => Number(t.slice(0, 2)));
   ok(ficheHours.length > 0 && ficheHours.every((h) => h < 12), 'La fiche garde le filtre « matin » (et propose toute la journée)');
   await client.goto(BASE + '/?q=' + encodeURIComponent('spa'));
+  await settled(client);
   ok((await client.locator('text=Bulle d\'O').count()) > 0, 'Rechercher « spa » trouve le bien-être (sans accent ni mot exact)');
   await client.goto(BASE + '/');
+  await settled(client);
   await client.locator('.venue-card .venue-link').first().click();
   await client.waitForURL(/\/lieu\//);
+  await settled(client);
   ok((await client.locator('.slot').count()) > 0, 'La fiche affiche des créneaux');
   const firstWeek = await client.locator('.days.avail .day b').first().textContent();
   await client.click('a.days-arrow[aria-label="7 jours suivants"]');
@@ -142,9 +165,11 @@ try {
   const gctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, geolocation: { latitude: 50.4542, longitude: 3.9567 }, permissions: ['geolocation'] });
   const geo = await gctx.newPage();
   await geo.goto(`${BASE}/?ville=tout`);
+  await settled(geo);
   await geo.click('.picker-btn');
   await geo.click('.picker-near');
   await geo.waitForURL((u) => u.searchParams.get('ville') === 'proche');
+  await settled(geo);
   const kms = (await geo.locator('.venue-card .km').allTextContents()).map((t) => {
     const m = t.match(/([\d,]+)\s*(k?m)/);
     return m ? Number(m[1].replace(',', '.')) * (m[2] === 'm' ? 0.001 : 1) : NaN;
@@ -160,6 +185,7 @@ try {
   const partner = await pctx.newPage();
   // Se connecter avec un email inconnu renvoie vers l'inscription
   await partner.goto(`${BASE}/connexion`);
+  await settled(partner);
   await partner.fill('input[name=email]', partnerEmail);
   await partner.click('button:has-text("Recevoir mon code")');
   await partner.waitForSelector('text=Aucun compte avec cet email.');
@@ -206,6 +232,7 @@ try {
   await login(admin, 'admin@aubaine.test', '/admin');
   await admin.click(`.queue-item:has-text("${venueName}")`);
   await admin.waitForURL(/\?id=/);
+  await settled(admin);
   await shot(admin, '04-admin');
   await admin.click('button:has-text("Mettre en ligne")');
   await admin.waitForSelector('text=Fiche mise en ligne. L’exploitant');
@@ -214,8 +241,10 @@ try {
   // 4. Le client voit la fiche publiée, l'exploitant voit le statut
   const slug = venueName.toLowerCase().replace(/\s+/g, '-');
   const res = await client.goto(`${BASE}/lieu/${slug}`);
+  await settled(client);
   ok(res.status() === 200 && (await client.locator('h1').textContent()).includes(venueName), 'La fiche est publique');
   await partner.goto(`${BASE}/pro`);
+  await settled(partner);
   ok(await partner.locator('text=Ta fiche est en ligne').isVisible(), 'L’exploitant voit sa fiche en ligne');
   await shot(partner, '05-pro-home');
 
@@ -228,8 +257,10 @@ try {
   const slotDate = `${parts.year}-${parts.month}-${parts.day}`;
   const slotTime = `${parts.hour}:${String(Math.floor(Number(parts.minute) / 5) * 5).padStart(2, '0')}`;
   await partner.goto(`${BASE}/pro/creneaux`);
+  await settled(partner);
   ok((await partner.locator('.week-grid .week-col').count()) === 7, 'Planning : la semaine entière en un coup d’œil');
   await partner.goto(`${BASE}/pro/creneaux?date=${slotDate}`);
+  await settled(partner);
   ok((await partner.locator('.offer-choice button').count()) === 2, 'Ouvrir un créneau : on choisit la prestation');
   await partner.fill('input[name=date]', slotDate);
   await partner.fill('input[name=time]', slotTime);
@@ -250,8 +281,10 @@ try {
   ok(true, 'Répéter sur 2 semaines ouvre 2 créneaux');
   // Modifier un créneau depuis le planning
   await partner.goto(`${BASE}/pro/creneaux?date=${slotDate}`);
+  await settled(partner);
   await partner.click(`.slot-card:has-text("${slotTime}"):has-text("La Prison")`);
   await partner.waitForURL(/creneau=/);
+  await settled(partner);
   await partner.click('.slot-editor .discount-chips button:has-text("−50 %")');
   await partner.click('.slot-editor button:has-text("Enregistrer")');
   await partner.waitForSelector('text=Créneau mis à jour.');
@@ -263,12 +296,15 @@ try {
   const cctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const buyer = await cctx.newPage();
   await buyer.goto(`${BASE}/lieu/${slug}?date=${slotDate}&n=4`);
+  await settled(buyer);
   ok((await buyer.locator('.offer-tabs a').count()) === 2, 'La fiche client propose les deux prestations');
   await buyer.locator('.slot:not(.full)').first().click();
   await buyer.click('.sticky-cta a:has-text("Réserver")');
   await buyer.waitForURL(/\/reserver/);
+  await settled(buyer);
   await buyer.click('a:has-text("Créer mon compte et réserver")');
   await buyer.waitForURL(/\/inscription/);
+  await settled(buyer);
   const buyerEmail = `client.${stamp}@test.be`;
   await buyer.fill('input[name=firstName]', 'Camille');
   await buyer.fill('input[name=email]', buyerEmail);
@@ -277,26 +313,31 @@ try {
   await buyer.fill('input[name=code]', code);
   await buyer.click('button:has-text("Créer mon compte")');
   await buyer.waitForURL(/\/reserver/);
+  await settled(buyer);
   ok(true, 'Inscription client au milieu de la réservation, retour sur la réservation');
   await shot(buyer, '07-paiement');
   await buyer.click('button:has-text("Payer")');
   await buyer.waitForURL(/\/billets\//);
+  await settled(buyer);
   ok(await buyer.locator('h1:has-text("C’est réservé !")').isVisible(), 'Réservation confirmée, billet affiché');
   const ticket = (await buyer.locator('[data-testid=ticket-code]').textContent()).trim();
   ok(/^[A-Z2-9]{6}$/.test(ticket), `Code du billet : ${ticket}`);
   await shot(buyer, '08-billet');
   await buyer.goto(`${BASE}/billets`);
+  await settled(buyer);
   ok(await buyer.locator(`text=${ticket}`).isVisible(), 'Le billet apparaît dans « Tes billets »');
 
   // 7. Le gérant ajoute une personne à l'accueil
   const staffEmail = `accueil.${stamp}@test.be`;
   await partner.goto(`${BASE}/pro/equipe`);
+  await settled(partner);
   await partner.fill('form input[name=email]', staffEmail);
   await partner.fill('form input[name=firstName]', 'Lucas');
   await partner.click('button:has-text("Ajouter à l’équipe")');
   await partner.waitForSelector('text=Lucas ajouté à l’accueil');
   ok(true, 'Le gérant ajoute Lucas à l’accueil');
   await partner.goto(`${BASE}/pro`);
+  await settled(partner);
   ok(await partner.locator('text=Rendement').isVisible(), 'Le gérant voit le rendement');
 
   // 8. L'accueil se connecte : il ne voit que la validation des arrivées
@@ -306,6 +347,10 @@ try {
   ok(new URL(staff.url()).pathname === '/pro', 'Un compte exploitant arrive sur son espace après connexion');
   ok(!(await staff.locator('text=Rendement').count()), 'L’accueil ne voit pas le rendement');
   await staff.goto(`${BASE}/pro/creneaux`);
+  await settled(staff);
+  // Redirection faite pendant le chargement en flux : elle peut arriver juste après l'affichage
+  await staff.waitForURL((u) => u.pathname === '/pro', { timeout: 8000 }).catch(() => {});
+  await settled(staff);
   ok(new URL(staff.url()).pathname === '/pro', 'L’accueil ne peut pas ouvrir les créneaux');
   await staff.fill('input[name=code]', ticket.toLowerCase());
   await staff.click('form button:has-text("Valider")');
@@ -319,11 +364,13 @@ try {
 
   // 9. Profil client : historique et infos
   await buyer.goto(`${BASE}/profil`);
+  await settled(buyer);
   ok(await buyer.locator('h1:has-text("Camille")').isVisible(), 'Le profil client affiche le prénom');
   await shot(buyer, '10-profil');
 
   // 10. Sécurité : un compte non admin ne peut pas ouvrir le back-office
   const res2 = await partner.goto(`${BASE}/admin`);
+  await settled(partner);
   ok(res2.status() === 404, 'Le back-office est fermé aux non-admins');
   console.log('\nTout est bon.');
 } finally {

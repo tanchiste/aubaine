@@ -41,14 +41,21 @@ export async function sendMail(mail: Mail): Promise<void> {
     return;
   }
   if (smtp) {
-    await nodemailer.createTransport(smtp).sendMail({
+    await nodemailer
+      .createTransport(smtp)
+      .sendMail({
       from: sender(),
       to: mail.to,
       subject: mail.subject,
       text: mail.text,
       html: mail.html,
       attachments: mail.attachments?.map((a) => ({ filename: a.filename, content: Buffer.from(a.content, 'base64'), contentType: a.contentType })),
-    });
+      })
+      .catch((e: { code?: string; responseCode?: number; response?: string }) => {
+        // Dans les logs Vercel : la cause (identifiants refusés, serveur injoignable…), jamais le mot de passe
+        console.error('[email] échec SMTP', e.code, e.responseCode, String(e.response ?? '').slice(0, 160));
+        throw new Error("L'email n'a pas pu être envoyé.");
+      });
     return;
   }
   const res = await fetch('https://api.resend.com/emails', {
@@ -354,29 +361,41 @@ export async function checkSmtp(): Promise<{ ok: boolean; detail: string }> {
   const smtp = process.env.SMTP_URL;
   if (!smtp) return { ok: false, detail: 'SMTP_URL absent' };
   if (lastCheck && Date.now() - lastCheck.at < 5 * 60_000) return lastCheck.result;
-  let result: { ok: boolean; detail: string };
-  try {
-    const user = decodeURIComponent(new URL(smtp).username);
-    if (!user.includes('@')) result = { ok: false, detail: 'adresse email introuvable dans SMTP_URL (le @ doit être écrit %40)' };
-    else {
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })), 9000));
-      await Promise.race([nodemailer.createTransport(smtp).verify(), timeout]);
-      result = { ok: true, detail: `connexion acceptée pour ${user}` };
-    }
-  } catch (e) {
-    const code = (e as { code?: string; responseCode?: number }).code;
-    result = {
-      ok: false,
-      detail:
-        code === 'EAUTH'
-          ? 'Gmail refuse l’identifiant ou le mot de passe d’application'
-          : ['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'EDNS', 'ECONNREFUSED'].includes(code ?? '')
-            ? 'serveur SMTP injoignable'
-            : e instanceof TypeError
-              ? 'SMTP_URL mal formée'
-              : `erreur inattendue${code ? ` (${code})` : ''}`,
-    };
-  }
+  const result = await diagnoseSmtp(smtp.trim());
   lastCheck = { at: Date.now(), result };
   return result;
+}
+
+/** Repère les erreurs de saisie courantes avant même d'appeler le serveur, puis teste la connexion */
+async function diagnoseSmtp(smtp: string): Promise<{ ok: boolean; detail: string }> {
+  if (/^["']|["']$/.test(smtp)) return { ok: false, detail: 'SMTP_URL contient des guillemets : enlève-les' };
+  if (/\s/.test(smtp)) return { ok: false, detail: 'SMTP_URL contient des espaces : le mot de passe d’application s’écrit sans espaces' };
+  let url: URL;
+  try {
+    url = new URL(smtp);
+  } catch {
+    return { ok: false, detail: 'SMTP_URL mal formée : modèle smtps://adresse%40gmail.com:motdepasse@smtp.gmail.com:465' };
+  }
+  const user = decodeURIComponent(url.username);
+  const pass = decodeURIComponent(url.password);
+  if (url.protocol !== 'smtps:' && url.protocol !== 'smtp:') return { ok: false, detail: 'SMTP_URL doit commencer par smtps://' };
+  if (!user.includes('@')) return { ok: false, detail: 'adresse email introuvable dans SMTP_URL : le @ de l’adresse s’écrit %40' };
+  if (!pass) return { ok: false, detail: 'mot de passe absent dans SMTP_URL (après les deux-points qui suivent l’adresse)' };
+  if (url.hostname === 'smtp.gmail.com' && pass.length !== 16)
+    return { ok: false, detail: `le mot de passe fait ${pass.length} caractères : un mot de passe d’application Google en fait 16 (pas ton mot de passe Gmail habituel)` };
+  try {
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })), 9000));
+    await Promise.race([nodemailer.createTransport(smtp).verify(), timeout]);
+    return { ok: true, detail: `connexion acceptée pour ${user}` };
+  } catch (e) {
+    const { code, responseCode, response } = e as { code?: string; responseCode?: number; response?: string };
+    const server = String(response ?? '').replace(/\s+/g, ' ').slice(0, 140);
+    if (code === 'EAUTH')
+      return {
+        ok: false,
+        detail: `Gmail refuse la connexion de ${user} (${responseCode ?? '?'}) : vérifie la validation en deux étapes et le mot de passe d’application, et regarde si une alerte de sécurité est arrivée dans la boîte Gmail. Réponse : ${server}`,
+      };
+    if (['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'EDNS', 'ECONNREFUSED'].includes(code ?? '')) return { ok: false, detail: `serveur ${url.hostname}:${url.port || '465'} injoignable (${code})` };
+    return { ok: false, detail: `erreur inattendue${code ? ` (${code})` : ''}${server ? ` : ${server}` : ''}` };
+  }
 }

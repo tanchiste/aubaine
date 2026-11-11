@@ -50,11 +50,13 @@ type Result = { ok: true; devCode?: string; adminKey?: boolean } | { ok: false; 
 /** Le code s'affiche à l'écran en phase de test, sauf pour l'équipe Aubaine en ligne */
 const codeOnScreen = (admin: boolean) => testMode() && (!admin || adminCodesOnScreen());
 
-/** Connexion admin avec la clé back-office : ni code à l'écran, ni service d'email configuré */
 /** Un service d'envoi d'emails est configuré (SMTP ou Resend) */
 const hasMailer = () => !!process.env.SMTP_URL || !!process.env.RESEND_API_KEY;
-/** Sans service d'email, l'équipe Aubaine se connecte avec la clé ADMIN_KEY ; avec un service, elle reçoit son code par email */
-const usesAdminKey = (email: string) => isAdminEmail(email) && !codeOnScreen(true) && !hasMailer() && adminKey() !== null;
+/**
+ * Connexion admin avec la clé back-office (ADMIN_KEY) dès qu'elle existe, sauf avec Resend :
+ * l'équipe Aubaine garde un accès même si l'envoi d'emails par SMTP tombe en panne.
+ */
+const usesAdminKey = (email: string) => isAdminEmail(email) && !codeOnScreen(true) && !process.env.RESEND_API_KEY && adminKey() !== null;
 
 /**
  * Envoie un code à 6 chiffres.

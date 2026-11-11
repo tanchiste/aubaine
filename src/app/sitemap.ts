@@ -10,7 +10,12 @@ export const revalidate = 3600;
 /** Accueil, fiches en ligne et pages d'information */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
-  const list = await db.select({ slug: venues.slug, updatedAt: venues.updatedAt }).from(venues).where(eq(venues.status, 'published'));
+  // Base injoignable pendant la construction : plan du site sans les fiches, recalculé à la prochaine heure
+  const list = await db
+    .select({ slug: venues.slug, updatedAt: venues.updatedAt })
+    .from(venues)
+    .where(eq(venues.status, 'published'))
+    .catch(() => []);
   const pages = ['/aide', '/conditions', '/conditions-partenaires', '/confidentialite', '/cookies', '/mentions-legales'];
   return [
     { url: `${base}/`, changeFrequency: 'hourly', priority: 1 },

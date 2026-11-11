@@ -885,3 +885,25 @@ p { margin: 0; }
 .slot-booking { padding: 10px 0; border-bottom: 1px solid var(--line-2); font-size: 14px; }
 .notify-toggle .btn.is-on { background: var(--ok-soft); border-color: #B7E3CD; color: #145C3F; }
 .danger-zone { width: 100%; background: var(--deal-soft); border-radius: 14px; padding: 12px 14px; }
+
+/* ---------- Back-office : tuiles-onglets et graphiques ---------- */
+.tile-link { text-decoration: none; color: var(--ink); border: 1.5px solid transparent; transition: border-color 0.15s, box-shadow 0.15s; }
+.tile-link:hover { color: var(--ink); border-color: var(--line); }
+.tile-link[aria-current='page'] { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.tile-link > span { display: flex; align-items: center; gap: 8px; }
+.tile-alert { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
+.chart-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.chart { width: 100%; min-width: 640px; max-width: 1200px; height: auto; display: block; overflow: visible; }
+.chart text { font-family: var(--font); }
+.chart-legend { display: flex; gap: 18px; font-size: 13px; color: var(--ink-2); }
+.chart-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.chart-legend i { width: 18px; height: 3px; border-radius: 2px; }
+.chart-legend i.dashed { background: repeating-linear-gradient(90deg, #C9C5DA 0 5px, transparent 5px 9px); }
+.hbars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.hbars li { display: grid; grid-template-columns: minmax(110px, 180px) minmax(0, 1fr) auto; align-items: center; gap: 14px; }
+.hbar-name { font-weight: 700; font-size: 14px; color: var(--ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-track { height: 14px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.hbar-fill { display: block; height: 100%; background: var(--primary); border-radius: 0 4px 4px 0; }
+.hbar-value { display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-size: 14px; white-space: nowrap; }
+.venue-map.admin-map { height: 380px; min-height: 0; border-radius: 16px; }
+@media (max-width: 640px) { .hbars li { grid-template-columns: 1fr auto; } .hbar-track { grid-column: 1 / -1; grid-row: 2; } }

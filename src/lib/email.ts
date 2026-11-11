@@ -341,3 +341,42 @@ export function reportDecisionMail(to: string, decision: string, venueName: stri
     ),
   };
 }
+
+/* ---------- Contrôle de la configuration ---------- */
+
+let lastCheck: { at: number; result: { ok: boolean; detail: string } } | null = null;
+
+/**
+ * Vérifie que le serveur SMTP accepte la connexion (sans envoyer d'email).
+ * Limité à un essai toutes les 5 minutes pour ne pas solliciter Gmail à chaque visite.
+ */
+export async function checkSmtp(): Promise<{ ok: boolean; detail: string }> {
+  const smtp = process.env.SMTP_URL;
+  if (!smtp) return { ok: false, detail: 'SMTP_URL absent' };
+  if (lastCheck && Date.now() - lastCheck.at < 5 * 60_000) return lastCheck.result;
+  let result: { ok: boolean; detail: string };
+  try {
+    const user = decodeURIComponent(new URL(smtp).username);
+    if (!user.includes('@')) result = { ok: false, detail: 'adresse email introuvable dans SMTP_URL (le @ doit être écrit %40)' };
+    else {
+      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })), 9000));
+      await Promise.race([nodemailer.createTransport(smtp).verify(), timeout]);
+      result = { ok: true, detail: `connexion acceptée pour ${user}` };
+    }
+  } catch (e) {
+    const code = (e as { code?: string; responseCode?: number }).code;
+    result = {
+      ok: false,
+      detail:
+        code === 'EAUTH'
+          ? 'Gmail refuse l’identifiant ou le mot de passe d’application'
+          : ['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'EDNS', 'ECONNREFUSED'].includes(code ?? '')
+            ? 'serveur SMTP injoignable'
+            : e instanceof TypeError
+              ? 'SMTP_URL mal formée'
+              : `erreur inattendue${code ? ` (${code})` : ''}`,
+    };
+  }
+  lastCheck = { at: Date.now(), result };
+  return result;
+}

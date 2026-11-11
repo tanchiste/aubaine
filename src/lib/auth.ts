@@ -76,23 +76,32 @@ export async function requestLoginCode(rawEmail: string, signup?: SignupPayload)
   if (admin && !onScreen && !keyMode && !hasMailer())
     return { ok: false, error: 'Accès au back-office : ajoute ADMIN_KEY (12 caractères minimum) ou SMTP_URL dans Vercel.' };
 
-  const [{ n }] = await db
-    .select({ n: sql<number>`count(*)::int` })
+  const [{ n, oldest }] = await db
+    .select({ n: sql<number>`count(*)::int`, oldest: sql<string | null>`min(${loginCodes.createdAt})` })
     .from(loginCodes)
     .where(and(eq(loginCodes.email, email), gt(loginCodes.createdAt, sql`now() - interval '1 hour'`)));
-  if (n >= MAX_CODES_PER_HOUR) return { ok: false, error: 'Trop de demandes. Réessaie dans quelques minutes.' };
+  if (n >= MAX_CODES_PER_HOUR) {
+    // Le plus ancien des codes de l'heure écoulée libère une place : on dit quand.
+    const wait = oldest ? Math.max(1, Math.ceil((new Date(oldest).getTime() + 3_600_000 - Date.now()) / 60_000)) : 60;
+    return { ok: false, error: `Trop de demandes pour cette adresse. Réessaie dans ${wait} min.` };
+  }
 
   const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
-  await db.insert(loginCodes).values({
-    email,
-    codeHash: codeHash(email, code),
-    payload: signup ?? null,
-    expiresAt: new Date(Date.now() + CODE_TTL_MIN * 60_000),
-  });
+  const [row] = await db
+    .insert(loginCodes)
+    .values({
+      email,
+      codeHash: codeHash(email, code),
+      payload: signup ?? null,
+      expiresAt: new Date(Date.now() + CODE_TTL_MIN * 60_000),
+    })
+    .returning({ id: loginCodes.id });
   if (!keyMode) {
     try {
       await sendMail(loginCodeMail(email, code));
     } catch {
+      // Un email qui n'est pas parti ne compte pas dans la limite de 5 codes par heure.
+      await db.delete(loginCodes).where(eq(loginCodes.id, row.id));
       return { ok: false, error: "L'email n'a pas pu être envoyé. Réessaie dans un instant." };
     }
   }

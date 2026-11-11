@@ -16,7 +16,7 @@ export const COMPANY = {
   /** Adresse du siège */
   address: '',
   /** Adresse de contact publique (clients, exploitants, signalements, données personnelles) */
-  email: '',
+  email: 'connect.aubaine@gmail.com',
   /** Facultatif */
   phone: '',
 };

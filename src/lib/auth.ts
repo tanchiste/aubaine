@@ -23,6 +23,9 @@ export type SignupPayload = {
   kind: AccountKind;
   firstName: string;
   venue?: { name: string; category: VenueCategory; city: string };
+  /** Versions des conditions acceptées à l'inscription */
+  terms?: string;
+  partnerTerms?: string;
 };
 
 function secret(): string {
@@ -124,7 +127,13 @@ export async function verifyLoginCode(rawEmail: string, rawCode: string): Promis
   const signup = (row.payload as SignupPayload | null) ?? null;
   const inserted = await db
     .insert(users)
-    .values({ email, kind: signup?.kind ?? 'client', firstName: signup?.firstName || null })
+    .values({
+      email,
+      kind: signup?.kind ?? 'client',
+      firstName: signup?.firstName || null,
+      ...(signup?.terms ? { termsAcceptedAt: new Date(), termsVersion: signup.terms } : {}),
+      ...(signup?.partnerTerms ? { partnerTermsAcceptedAt: new Date(), partnerTermsVersion: signup.partnerTerms } : {}),
+    })
     .onConflictDoNothing({ target: users.email })
     .returning({ id: users.id });
   const [user] = await db.select().from(users).where(eq(users.email, email));

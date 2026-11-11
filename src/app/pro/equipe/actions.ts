@@ -32,7 +32,8 @@ export async function inviteAction(_prev: TeamState, form: FormData): Promise<Te
     await db.insert(users).values({ email, kind: 'exploitant', firstName: firstName || null }).onConflictDoNothing({ target: users.email });
     const [u] = await db.select().from(users).where(eq(users.email, email));
     if (u.kind === 'client') await db.update(users).set({ kind: 'exploitant' }).where(eq(users.id, u.id));
-    const added = await db.insert(venueMembers).values({ venueId: venue.id, userId: u.id, role }).onConflictDoNothing().returning();
+    // Les emails de réservation vont au gérant ; l'accueil peut les recevoir aussi si le gérant l'active.
+    const added = await db.insert(venueMembers).values({ venueId: venue.id, userId: u.id, role, notify: role === 'owner' }).onConflictDoNothing().returning();
     if (added.length === 0) return { error: 'Cette personne fait déjà partie de l’équipe.' };
     const app = process.env.APP_URL ?? 'http://localhost:3000';
     const what = role === 'owner' ? 'gérant' : 'à l’accueil';
@@ -75,5 +76,15 @@ export async function removeMemberAction(form: FormData) {
   const userId = String(form.get('userId'));
   if (!z.uuid().safeParse(userId).success || userId === user.id) return;
   await db.delete(venueMembers).where(and(eq(venueMembers.venueId, venue.id), eq(venueMembers.userId, userId)));
+  revalidatePath('/pro/equipe');
+}
+
+/** Emails de réservation, d'annulation et récap de la veille : par membre, au choix du gérant */
+export async function toggleNotifyAction(form: FormData) {
+  const { venue } = await ownerContext();
+  const userId = String(form.get('userId'));
+  if (!z.uuid().safeParse(userId).success) return;
+  const notify = form.get('notify') === 'on';
+  await db.update(venueMembers).set({ notify }).where(and(eq(venueMembers.venueId, venue.id), eq(venueMembers.userId, userId)));
   revalidatePath('/pro/equipe');
 }

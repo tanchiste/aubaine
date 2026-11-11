@@ -20,6 +20,8 @@ export type VenueFormValues = {
   priceUnit: 'person' | 'session';
   baseDiscountPct: number;
   color: string;
+  legalName: string | null;
+  companyNumber: string | null;
 };
 
 
@@ -67,6 +69,21 @@ export function VenueForm({ v, locked }: { v: VenueFormValues; locked: boolean }
             <textarea className="textarea" name="description" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={800} placeholder="Ce que vivent les clients, en 2 ou 3 phrases : l’activité, l’ambiance, ce qui est compris." />
             <span className="hint">{desc.trim().length < 40 ? `Encore ${40 - desc.trim().length} caractères minimum` : `${desc.length} / 800`}</span>
           </label>
+        </section>
+
+        <section className="card stack" aria-labelledby="f-legal">
+          <h2 id="f-legal" style={{ fontSize: 15, fontWeight: 800 }}>Informations légales</h2>
+          <p className="small muted">Affichées aux clients sur ta fiche et dans leur confirmation : la loi impose d’indiquer qui fournit la prestation.</p>
+          <div className="grid-2">
+            <label className="field">
+              <span>Nom légal de l’exploitant</span>
+              <input className="input" name="legalName" defaultValue={v.legalName ?? ''} maxLength={80} placeholder="Ex. Kart’Ohm SRL" autoComplete="organization" />
+            </label>
+            <label className="field">
+              <span>Numéro d’entreprise (BCE)</span>
+              <input className="input" name="companyNumber" defaultValue={v.companyNumber ?? ''} maxLength={20} placeholder="0123.456.789" inputMode="numeric" />
+            </label>
+          </div>
         </section>
 
         <section className="card stack" aria-labelledby="f-price">

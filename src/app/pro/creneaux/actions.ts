@@ -4,8 +4,10 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
-import { holdsPlace } from '@/lib/bookings';
-import { bookings, offers, slots } from '@/db/schema';
+import { getBooking, holdsPlace } from '@/lib/bookings';
+import { bookings, offers, slots, venueEvents } from '@/db/schema';
+import { bookingCancelledByVenueMail, sendMail } from '@/lib/email';
+import { refundBooking } from '@/lib/payments';
 import { getMyVenues, requireUser } from '@/lib/auth';
 import { MAX_DISCOUNT, MIN_DISCOUNT } from '@/lib/pricing';
 
@@ -144,4 +146,45 @@ export async function deleteSlotAction(form: FormData) {
   revalidatePath('/');
   const back = String(form.get('back') ?? '');
   redirect(/^\/pro\/creneaux(\?[\w=&%-]*)?$/.test(back) ? back : '/pro/creneaux');
+}
+
+/**
+ * Annulation par l'établissement (panne, fermeture, sécurité) : le client est remboursé en entier,
+ * prévenu avec le motif, et aucune commission n'est due.
+ */
+export async function cancelByVenueAction(_prev: SlotFormState, form: FormData): Promise<SlotFormState> {
+  try {
+    const id = String(form.get('bookingId') ?? '');
+    const reason = String(form.get('reason') ?? '').trim().slice(0, 300);
+    if (reason.length < 5) return { error: 'Indique le motif au client (5 caractères minimum).' };
+    const row = await getBooking(id);
+    if (!row) return { error: 'Réservation introuvable.' };
+    const venue = await ownVenue(row.venue.id);
+    const user = await requireUser('/pro/creneaux');
+    if (row.booking.status !== 'confirmed') return { error: 'Cette réservation ne peut plus être annulée.' };
+    if (row.slot.startsAt.getTime() < Date.now() - 3 * 3_600_000) return { error: 'Ce créneau est passé.' };
+    let refunded = false;
+    if (row.booking.stripePaymentIntent) {
+      try {
+        refunded = await refundBooking(id);
+      } catch (e) {
+        console.error('[stripe] remboursement exploitant', e);
+        return { error: 'Le remboursement n’a pas pu partir : la réservation reste valable. Réessaie dans un instant.' };
+      }
+    }
+    const [done] = await db
+      .update(bookings)
+      .set({ status: 'cancelled', cancelledAt: new Date(), cancelledBy: 'venue', cancelReason: reason, feeCents: 0 })
+      .where(and(eq(bookings.id, id), eq(bookings.status, 'confirmed')))
+      .returning({ id: bookings.id });
+    if (!done) return { error: 'Cette réservation ne peut plus être annulée.' };
+    await db.insert(venueEvents).values({ venueId: venue.id, actorId: user.id, action: 'booking_cancelled', message: `${row.booking.code} : ${reason}` });
+    await sendMail(bookingCancelledByVenueMail(row, reason, refunded)).catch((e) => console.error('[email] annulation exploitant', e));
+    revalidatePath('/pro', 'layout');
+    revalidatePath('/billets');
+    return { ok: true, message: `Réservation de ${row.user.firstName ?? 'ce client'} annulée : remboursé${refunded ? '' : ' (rien n’avait été débité)'} et prévenu par email.` };
+  } catch (e) {
+    console.error(e);
+    return { error: friendly(e, 'L’annulation n’a pas abouti. Réessaie.') };
+  }
 }

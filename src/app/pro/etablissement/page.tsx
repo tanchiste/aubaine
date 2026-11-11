@@ -53,7 +53,7 @@ export default async function VenueSettingsPage({ searchParams }: { searchParams
           v={{
             id: v.id, name: v.name, category: v.category, city: v.city, area: v.area, address: v.address, description: v.description,
             durationMin: v.durationMin, groupMin: v.groupMin, groupMax: v.groupMax, capacity: v.capacity, capacityUnit: v.capacityUnit,
-            priceCents: v.priceCents, priceUnit: v.priceUnit, baseDiscountPct: v.baseDiscountPct, color: v.color,
+            priceCents: v.priceCents, priceUnit: v.priceUnit, baseDiscountPct: v.baseDiscountPct, color: v.color, legalName: v.legalName, companyNumber: v.companyNumber,
           }}
         />
         <div className="stack" style={{ ['--gap' as string]: '14px' }}>

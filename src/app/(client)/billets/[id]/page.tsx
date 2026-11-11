@@ -85,6 +85,11 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
             <span className="small muted">{booking.paymentMethod === 'simulé' ? 'Paiement simulé (phase de test)' : `Payé par ${paymentLabel(booking.paymentMethod)}`}</span>
             {booking.status === 'checked_in' && <span className="pill pill-ok" style={{ alignSelf: 'flex-start' }}>Arrivée validée</span>}
             {cancelled && <span className="pill pill-deal" style={{ alignSelf: 'flex-start' }}>{booking.refundedAt ? 'Annulée · remboursée' : 'Annulée'}</span>}
+            {cancelled && booking.cancelledBy === 'venue' && (
+              <span className="small" style={{ color: 'var(--ink-2)' }}>
+                Annulée par le lieu{booking.cancelReason ? ` : ${booking.cancelReason}` : ''}
+              </span>
+            )}
           </div>
         </div>
       </article>

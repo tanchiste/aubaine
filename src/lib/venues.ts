@@ -302,10 +302,11 @@ export async function lastMinute(today: string, people: number, city?: string) {
   return out.sort((a, b) => b.slot.discountPct - a.slot.discountPct).slice(0, 6);
 }
 
-export async function venueBySlug(slug: string) {
+/** Une fiche par son adresse ; lue une seule fois par page (métadonnées et contenu) */
+export const venueBySlug = cache(async (slug: string) => {
   const [v] = await db.select().from(venues).where(eq(venues.slug, slug)).limit(1);
   return v ?? null;
-}
+});
 
 export async function venueSlotsForDay(venueId: string, date: string) {
   return (await slotsForDay(date, [venueId])).map(toSlot);
@@ -345,6 +346,7 @@ export function checklist(v: Venue, photoCount: number, offerList: Offer[]): Che
   const missing: string[] = [];
   if (!v.description || v.description.trim().length < 40) missing.push('description (40 caractères minimum)');
   if (!v.address) missing.push('adresse');
+  if (!v.legalName || !v.companyNumber) missing.push('nom légal et numéro d’entreprise');
   const ready = offerList.filter((o) => o.isActive && o.priceCents > 0 && o.durationMin > 0 && o.groupMin <= o.groupMax);
 
   return [
@@ -352,7 +354,7 @@ export function checklist(v: Venue, photoCount: number, offerList: Offer[]): Che
       key: 'fiche',
       label: 'Fiche complète',
       state: missing.length ? 'ko' : 'ok',
-      detail: missing.length ? `À compléter : ${missing.join(', ')}` : 'Description et adresse renseignées',
+      detail: missing.length ? `À compléter : ${missing.join(', ')}` : 'Description, adresse et informations légales renseignées',
     },
     {
       key: 'prestations',

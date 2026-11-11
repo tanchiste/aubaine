@@ -1,3 +1,4 @@
+import { SiteFooter } from '@/components/SiteFooter';
 import { TabBar } from '@/components/TabBar';
 import { TopNav, type NavUser } from '@/components/TopNav';
 import { getCurrentUser, getMyVenues } from '@/lib/auth';
@@ -9,7 +10,10 @@ export default async function ClientLayout({ children }: { children: React.React
   return (
     <div className="client">
       <TopNav user={nav} />
-      <main className="client-main">{children}</main>
+      <main className="client-main">
+        {children}
+        <SiteFooter />
+      </main>
       <TabBar />
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useActionState, useMemo, useState } from 'react';
-import { createSlotsAction, deleteSlotAction, toggleSlotAction, updateSlotAction, type SlotFormState } from './actions';
+import { cancelByVenueAction, createSlotsAction, deleteSlotAction, toggleSlotAction, updateSlotAction, type SlotFormState } from './actions';
 
 export type EditorOffer = { id: string; name: string; priceCents: number; priceUnit: 'person' | 'session'; capacity: number; capacityUnit: 'places' | 'groupes'; color: string };
 
@@ -161,7 +161,56 @@ export type EditSlot = {
   isOpen: boolean;
   past: boolean;
   offer: EditorOffer;
+  /** Réservations du créneau, pour l'accueil et l'annulation par l'établissement */
+  list: SlotBooking[];
+  /** Seul le gérant peut annuler une réservation */
+  canCancel: boolean;
 };
+
+export type SlotBooking = { id: string; firstName: string | null; people: number; code: string; status: string };
+
+/** Réservation d'un créneau, avec l'annulation (motif obligatoire, envoyé au client) */
+function BookingLine({ b, canCancel }: { b: SlotBooking; canCancel: boolean }) {
+  const [state, action, pending] = useActionState<SlotFormState, FormData>(cancelByVenueAction, {});
+  const [open, setOpen] = useState(false);
+  const cancelled = b.status === 'cancelled' || state.ok;
+  return (
+    <li className="slot-booking">
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span>
+          <b>{b.firstName ?? 'Client'}</b> · {b.people} pers. <span className="muted small" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: 1 }}>{b.code}</span>
+        </span>
+        {cancelled ? (
+          <span className="pill pill-muted">annulée</span>
+        ) : b.status === 'checked_in' ? (
+          <span className="pill pill-ok">arrivé</span>
+        ) : (
+          canCancel && !open && (
+            <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}>
+              Annuler
+            </button>
+          )
+        )}
+      </div>
+      {state.ok && <p className="notice notice-ok small" role="status">{state.message}</p>}
+      {open && !cancelled && (
+        <form action={action} className="stack" style={{ ['--gap' as string]: '8px', marginTop: 8 }}>
+          <input type="hidden" name="bookingId" value={b.id} />
+          <label className="field">
+            <span>Motif envoyé au client</span>
+            <textarea className="textarea" name="reason" required minLength={5} maxLength={300} rows={2} placeholder="Ex. Panne de la piste, nous sommes désolés." />
+          </label>
+          <p className="hint">Le client est remboursé en entier et prévenu par email. Aucune commission n’est due.</p>
+          {state.error && <p className="error" role="alert">{state.error}</p>}
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-sm" onClick={() => setOpen(false)} disabled={pending}>Garder</button>
+            <button className="btn btn-sm btn-danger" disabled={pending}>{pending ? 'Annulation…' : 'Annuler et rembourser'}</button>
+          </div>
+        </form>
+      )}
+    </li>
+  );
+}
 
 /** Modifier un créneau existant */
 export function EditSlotForm({ slot, back }: { slot: EditSlot; back: string }) {
@@ -181,6 +230,13 @@ export function EditSlotForm({ slot, back }: { slot: EditSlot; back: string }) {
         <b>{slot.bookings}</b> réservation{slot.bookings > 1 ? 's' : ''} · {slot.used} / {slot.capacity} {slot.offer.capacityUnit === 'places' ? 'places' : 'salles'} prises
         {!slot.isOpen && <span className="pill pill-muted" style={{ marginLeft: 8 }}>fermé</span>}
       </p>
+      {slot.list.length > 0 && (
+        <ul className="slot-bookings" aria-label="Réservations du créneau">
+          {slot.list.map((b) => (
+            <BookingLine key={b.id} b={b} canCancel={slot.canCancel} />
+          ))}
+        </ul>
+      )}
       <form action={action} className="stack" style={{ ['--gap' as string]: '16px' }}>
         <input type="hidden" name="slotId" value={slot.id} />
         <label className="field" style={{ maxWidth: 200 }}>

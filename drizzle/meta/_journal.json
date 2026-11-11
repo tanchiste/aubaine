@@ -43,6 +43,13 @@
       "when": 1793979404028,
       "tag": "0005_paiements",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794394917118,
+      "tag": "0006_legal_notifications",
+      "breakpoints": true
     }
   ]
 }

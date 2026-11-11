@@ -12,13 +12,24 @@ import { DatePicker } from '@/components/DatePicker';
 import { LazyMap } from '@/components/LazyMap';
 import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
 import { discounted, quote } from '@/lib/pricing';
-import { offersOf, photoList, unitsFor, venueBySlug, venueSlotsRange, type SlotView } from '@/lib/venues';
+import { firstPhotos, offersOf, photoList, unitsFor, venueBySlug, venueSlotsRange, type SlotView } from '@/lib/venues';
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const v = await venueBySlug((await params).slug);
-  return { title: v ? v.name : 'Lieu introuvable' };
+  if (!v) return { title: 'Lieu introuvable' };
+  const photo = (await firstPhotos([v.id])).get(v.id);
+  const lead = `${CATEGORIES[v.category].label} à ${v.city} : réserve les heures creuses jusqu’à −${v.baseDiscountPct} %.`;
+  const description = v.description ? `${lead} ${v.description}`.slice(0, 200) : lead;
+  return {
+    title: `${v.name}, ${v.city}`,
+    description,
+    alternates: { canonical: `/lieu/${v.slug}` },
+    openGraph: { title: `${v.name} à prix creux`, description: lead, type: 'website', images: photo ? [{ url: `/api/photos/${photo}?w=1200`, width: 1200, alt: v.name }] : undefined },
+    // Aperçu d'une fiche pas encore en ligne : jamais indexé
+    robots: v.status === 'published' ? undefined : { index: false, follow: false },
+  };
 }
 
 export default async function VenuePage({ params, searchParams }: Props) {
@@ -189,6 +200,13 @@ export default async function VenuePage({ params, searchParams }: Props) {
             </a>
           </div>
         )}
+        <p className="small muted provider">
+          Activité fournie par {venue.legalName ?? `l’exploitant de ${venue.name}`}
+          {venue.companyNumber ? `, n° d’entreprise ${venue.companyNumber}` : ''}, professionnel. Aubaine prend la réservation et le paiement en son nom.{' '}
+          <Link href={`/signaler?lieu=${venue.slug}`} prefetch={false}>
+            Signaler cette fiche
+          </Link>
+        </p>
       </div>
       </div>
 

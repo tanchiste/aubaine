@@ -39,6 +39,7 @@ async function signup(page, { kind, firstName, email, venue, next }) {
   if (venue) {
     await page.fill('input[name=venueName]', venue.name);
     await page.selectOption('select[name=category]', venue.category);
+    await page.check('input[name=partnerTerms]');
   }
   await page.click('button:has-text("Recevoir mon code")');
   const code = (await page.locator('[data-testid=dev-code] b').textContent()).trim();
@@ -150,6 +151,7 @@ try {
   await client.locator('.venue-card .venue-link').first().click();
   await client.waitForURL(/\/lieu\//);
   await settled(client);
+  await client.locator('.slot').first().waitFor({ timeout: 8000 }).catch(() => {});
   ok((await client.locator('.slot').count()) > 0, 'La fiche affiche des créneaux');
   const firstWeek = await client.locator('.days.avail .day b').first().textContent();
   await client.click('a.days-arrow[aria-label="7 jours suivants"]');
@@ -206,6 +208,8 @@ try {
   ok((await partner.locator('.offer-list > li').count()) === 2, 'Deux prestations, chacune avec son prix');
   await partner.fill('textarea[name=description]', 'Deux salles immersives de 60 minutes au cœur de Mons, de 2 à 6 joueurs, idéal entre amis.');
   await partner.fill('input[name=address]', 'Rue de la Chaussée 1, 7000 Mons');
+  await partner.fill('input[name=legalName]', 'Escape Test SRL');
+  await partner.fill('input[name=companyNumber]', '0123456749');
   await partner.click('form:has(textarea[name=description]) button:has-text("Enregistrer")');
   await partner.waitForSelector('text=Fiche enregistrée.');
   ok(true, 'Fiche enregistrée');

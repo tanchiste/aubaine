@@ -1,8 +1,9 @@
 'use client';
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { bookAction, type BookState } from './actions';
 
-export function BookForm({ slotId, people, total, needName, online }: { slotId: string; people: number; total: string; needName: boolean; online: boolean }) {
+export function BookForm({ slotId, people, total, needName, online, cancelHours }: { slotId: string; people: number; total: string; needName: boolean; online: boolean; cancelHours: number }) {
   const [state, action, pending] = useActionState<BookState, FormData>(bookAction, {});
   return (
     <form action={action} className="stack" style={{ ['--gap' as string]: '12px' }}>
@@ -15,6 +16,10 @@ export function BookForm({ slotId, people, total, needName, online }: { slotId: 
         </label>
       )}
       {state.error && <p className="error" role="alert">{state.error}</p>}
+      <p className="small muted legal-line">
+        Annulation gratuite jusqu’à {cancelHours} h avant, avec remboursement complet. S’agissant d’une activité de loisirs à date fixe, il n’y a pas de délai de rétractation de 14 jours. En
+        payant, tu acceptes les <Link href="/conditions" target="_blank">conditions de réservation</Link>.
+      </p>
       <button className="btn btn-dark btn-lg btn-block" disabled={pending} style={{ background: '#000', borderColor: '#000' }}>
         {pending ? (online ? 'Ouverture du paiement…' : 'Réservation…') : `Payer ${total}`}
       </button>

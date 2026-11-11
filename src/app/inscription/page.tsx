@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { MiniFooter } from '@/components/SiteFooter';
 import { Logo } from '@/components/ui';
 import { IconCompass, IconStore } from '@/components/icons';
 import { getCurrentUser, showDevCode } from '@/lib/auth';
@@ -64,6 +65,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
           </>
         )}
       </div>
+      <MiniFooter />
     </main>
   );
 }

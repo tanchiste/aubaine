@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
+import { bookings, users } from '@/db/schema';
 import { IconBack, IconChevronRight, IconPlus } from '@/components/icons';
 import { addDays, brusselsDate, capitalize, euros, isDateStr, longDate, timeLabel } from '@/lib/format';
 import { discounted } from '@/lib/pricing';
@@ -32,7 +33,7 @@ const rangeFmt = new Intl.DateTimeFormat('fr-BE', { day: 'numeric', month: 'long
 
 export default async function SlotsPage({ searchParams }: { searchParams: Promise<{ semaine?: string; date?: string; creneau?: string }> }) {
   const sp = await searchParams;
-  const { current } = await requireOwnerContext('/pro/creneaux');
+  const { current, role } = await requireOwnerContext('/pro/creneaux');
   if (!current) redirect('/pro');
   const venue = current.venue;
   const today = brusselsDate();
@@ -73,6 +74,14 @@ export default async function SlotsPage({ searchParams }: { searchParams: Promis
   const now = Date.now();
 
   const editing = sp.creneau ? list.find((r) => r.id === sp.creneau) : undefined;
+  const slotBookings = editing
+    ? await db
+        .select({ id: bookings.id, firstName: users.firstName, people: bookings.people, code: bookings.code, status: bookings.status })
+        .from(bookings)
+        .innerJoin(users, eq(users.id, bookings.userId))
+        .where(and(eq(bookings.slotId, editing.id), inArray(bookings.status, ['confirmed', 'checked_in', 'cancelled', 'no_show'])))
+        .orderBy(bookings.createdAt)
+    : [];
   // Le panneau latéral ne s'ouvre que pour créer ou modifier : le reste du temps, la semaine prend toute la place.
   const panel = editing ? 'edit' : sp.date || active.length === 0 ? 'new' : null;
   const base = (extra: Record<string, string>) => `/pro/creneaux?${new URLSearchParams({ semaine: week, ...extra }).toString()}`;
@@ -179,6 +188,8 @@ export default async function SlotsPage({ searchParams }: { searchParams: Promis
                 isOpen: editing.is_open,
                 past: editing.startsAt.getTime() < now,
                 offer: offerById.get(editing.offer_id)!,
+                list: slotBookings,
+                canCancel: role === 'owner',
               }}
             />
           ) : (

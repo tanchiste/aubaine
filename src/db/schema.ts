@@ -72,6 +72,14 @@ export const users = pgTable('users', {
   /** ville préférée, utilisée par défaut dans Explorer */
   city: text('city'),
   referralCode: text('referral_code').unique(),
+  /** Conditions acceptées (version = date de la version en vigueur, voir src/lib/legal.ts) */
+  termsAcceptedAt: ts('terms_accepted_at'),
+  termsVersion: text('terms_version'),
+  /** Conditions partenaires acceptées par un exploitant */
+  partnerTermsAcceptedAt: ts('partner_terms_accepted_at'),
+  partnerTermsVersion: text('partner_terms_version'),
+  /** Compte supprimé à la demande : données personnelles effacées, réservations gardées pour la comptabilité */
+  deletedAt: ts('deleted_at'),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 
@@ -134,6 +142,10 @@ export const venues = pgTable(
     reviewMessage: text('review_message'),
     submittedAt: ts('submitted_at'),
     publishedAt: ts('published_at'),
+    /** Exploitant légal de l'établissement (affiché aux clients : obligation des places de marché) */
+    legalName: text('legal_name'),
+    /** Numéro d'entreprise BCE, au format 0123.456.789 */
+    companyNumber: text('company_number'),
     /** données de démonstration, à supprimer avant le lancement */
     isDemo: boolean('is_demo').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
@@ -169,6 +181,8 @@ export const venueMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     role: memberRole('role').notNull().default('owner'),
+    /** Email à chaque réservation ou annulation, et récap de la veille */
+    notify: boolean('notify').notNull().default(true),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.venueId, t.userId] }), index('venue_members_user_idx').on(t.userId)],
@@ -275,12 +289,41 @@ export const bookings = pgTable(
     refundedAt: ts('refunded_at'),
     /** commission Aubaine figée au paiement */
     feeCents: integer('fee_cents').notNull().default(0),
+    /** Annulation : par le client, par l'établissement (avec le motif envoyé au client) */
+    cancelledBy: text('cancelled_by'),
+    cancelReason: text('cancel_reason'),
+    /** Rappel envoyé la veille */
+    remindedAt: ts('reminded_at'),
   },
   (t) => [
     index('bookings_slot_idx').on(t.slotId),
     index('bookings_user_idx').on(t.userId),
     index('bookings_venue_idx').on(t.venueId, t.createdAt),
   ],
+);
+
+/* ---------- Signalements (règlement sur les services numériques) ---------- */
+
+export const reportStatus = pgEnum('report_status', ['open', 'resolved', 'dismissed']);
+
+/** Contenu signalé par un visiteur : fiche, photo, prix trompeur… traité par l'équipe Aubaine */
+export const reports = pgTable(
+  'reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'cascade' }),
+    reporterId: uuid('reporter_id').references(() => users.id, { onDelete: 'set null' }),
+    email: text('email'),
+    reason: text('reason').notNull(),
+    details: text('details').notNull(),
+    status: reportStatus('status').notNull().default('open'),
+    /** Décision et motivation, envoyées à la personne qui a signalé */
+    resolution: text('resolution'),
+    resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+    resolvedAt: ts('resolved_at'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('reports_status_idx').on(t.status, t.createdAt)],
 );
 
 export type User = typeof users.$inferSelect;
@@ -292,3 +335,4 @@ export type Offer = typeof offers.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
 export type VenueStatus = (typeof venueStatus.enumValues)[number];
 export type VenueCategory = (typeof venueCategory.enumValues)[number];
+export type Report = typeof reports.$inferSelect;

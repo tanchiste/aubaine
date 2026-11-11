@@ -10,6 +10,7 @@ import { quote } from '@/lib/pricing';
 import { firstPhotos } from '@/lib/venues';
 import { getCurrentUser } from '@/lib/auth';
 import { paymentsEnabled } from '@/lib/payments';
+import { CANCEL_HOURS } from '@/lib/bookings-rules';
 import { BookForm } from './BookForm';
 
 export const metadata = { title: 'Ta réservation' };
@@ -51,11 +52,12 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
         <div className="row" style={{ justifyContent: 'space-between' }}><dt className="muted">Prix normal</dt><dd style={{ margin: 0, fontWeight: 600 }}>{euros(price.full)}</dd></div>
         <div className="row" style={{ justifyContent: 'space-between' }}><dt className="muted">Remise heures creuses (−{slot.discountPct} %)</dt><dd style={{ margin: 0, fontWeight: 600, color: 'var(--deal)' }}>−{euros(price.saved)}</dd></div>
         <div className="row" style={{ justifyContent: 'space-between', fontSize: 18, fontWeight: 800, borderTop: '1px dashed var(--line)', paddingTop: 10 }}><dt>Total</dt><dd style={{ margin: 0 }}>{euros(price.total)}</dd></div>
+        <p className="small muted" style={{ margin: 0 }}>TVA comprise, sans frais de service.</p>
       </dl>
       {sp.paiement === 'annule' && <p className="notice notice-amber" role="status">Paiement annulé : rien n’a été débité. Tu peux réessayer.</p>}
       {sp.paiement === 'echec' && <p className="notice notice-amber" role="alert">Le paiement n’a pas abouti : rien n’a été débité. Réessaie ou choisis un autre moyen.</p>}
       {user ? (
-        <BookForm slotId={slot.id} people={n} total={euros(price.total)} needName={!user.firstName} online={paymentsEnabled()} />
+        <BookForm slotId={slot.id} people={n} total={euros(price.total)} needName={!user.firstName} online={paymentsEnabled()} cancelHours={CANCEL_HOURS} />
       ) : (
         <div className="stack" style={{ ['--gap' as string]: '10px' }}>
           <Link className="btn btn-primary btn-lg btn-block" href={`/inscription?type=client&suite=${encodeURIComponent(`/reserver?slot=${slot.id}&n=${n}`)}`}>
@@ -67,7 +69,10 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
           <p className="small muted" style={{ textAlign: 'center' }}>Sans mot de passe : un code par email suffit. Billet, points et parrainage au même endroit.</p>
         </div>
       )}
-      <p className="small muted" style={{ textAlign: 'center' }}>Annulation gratuite jusqu’à 2 h avant.</p>
+      <p className="small muted legal-line">
+        Activité fournie par <b>{venue.legalName ?? venue.name}</b>
+        {venue.companyNumber ? `, n° d’entreprise ${venue.companyNumber}` : ''}. Aubaine prend la réservation et encaisse le paiement en son nom.
+      </p>
     </div>
   );
 }

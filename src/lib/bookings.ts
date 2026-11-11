@@ -6,8 +6,9 @@ import { bookings, offers, slots, users, venues } from '@/db/schema';
 import { COMMISSION_PCT, quote } from './pricing';
 import { unitsFor } from './venues';
 
-/** Délai d'annulation gratuite avant le début du créneau */
-export const CANCEL_HOURS = 2;
+import { CANCEL_HOURS, HOLD_MINUTES } from './bookings-rules';
+
+export { CANCEL_HOURS, HOLD_MINUTES };
 
 // Sans 0/O, 1/I/L : lisible à voix haute à l'accueil.
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -19,8 +20,6 @@ function newCode(): string {
 
 export class BookingError extends Error {}
 
-/** Durée pendant laquelle les places restent tenues pour un client qui paie en ligne */
-export const HOLD_MINUTES = 35;
 
 /** Réservations qui occupent des places : confirmées, arrivées, ou en cours de paiement et pas encore expirées */
 export const holdsPlace = () =>

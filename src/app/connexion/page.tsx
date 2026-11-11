@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { MiniFooter } from '@/components/SiteFooter';
 import { Logo } from '@/components/ui';
 import { getCurrentUser, showDevCode } from '@/lib/auth';
 import { LoginForm } from './LoginForm';
@@ -25,6 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         )}
         <LoginForm next={next} />
       </div>
+      <MiniFooter />
     </main>
   );
 }

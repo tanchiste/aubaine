@@ -5,11 +5,12 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
-import { bookings, offers, slots, venueEvents, venueMembers, venuePhotos, venues, type VenueCategory } from '@/db/schema';
+import { bookings, offers, slots, users, venueEvents, venueMembers, venuePhotos, venues, type VenueCategory } from '@/db/schema';
 import { adminEmails, getMyVenues, requireUser } from '@/lib/auth';
 import { CATEGORY_KEYS, VENUE_COLORS } from '@/lib/categories';
 import { sendMail } from '@/lib/email';
 import { geocode } from '@/lib/geo';
+import { TERMS_VERSION, normalizeCompanyNumber } from '@/lib/legal';
 import { MAX_DISCOUNT, MIN_DISCOUNT } from '@/lib/pricing';
 import { VENUE_COOKIE, createDraftVenue } from '@/lib/pro';
 import { checklist, isReady, offersOf } from '@/lib/venues';
@@ -48,6 +49,8 @@ export async function createVenueAction(_prev: FormState, form: FormData): Promi
   const parsed = createSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { name, category, city } = parsed.data;
+  if (form.get('partnerTerms') !== 'on') return { error: 'Pour continuer, accepte les conditions partenaires.' };
+  await db.update(users).set({ partnerTermsAcceptedAt: new Date(), partnerTermsVersion: TERMS_VERSION }).where(eq(users.id, user.id));
 
   const venueId = await createDraftVenue(user.id, { name, category, city });
   (await cookies()).set(VENUE_COOKIE, venueId, { path: '/', sameSite: 'lax', httpOnly: true, maxAge: 31536000 });
@@ -94,6 +97,21 @@ const venueSchema = z.object({
   description: z.string().trim().max(800, 'Description trop longue (800 caractères maximum).').optional().transform((s) => s || null),
   baseDiscountPct: int(MIN_DISCOUNT, MAX_DISCOUNT, 'Remise'),
   color: z.string().refine((c) => VENUE_COLORS.includes(c), 'Couleur invalide.'),
+  legalName: z.string().trim().max(80).optional().transform((s) => s || null),
+  companyNumber: z
+    .string()
+    .trim()
+    .max(20)
+    .optional()
+    .transform((s, ctx) => {
+      if (!s) return null;
+      const n = normalizeCompanyNumber(s);
+      if (!n) {
+        ctx.addIssue({ code: 'custom', message: 'Numéro d’entreprise invalide : 10 chiffres, au format 0123.456.789.' });
+        return z.NEVER;
+      }
+      return n;
+    }),
 });
 
 export async function saveVenueAction(_prev: FormState, form: FormData): Promise<FormState> {

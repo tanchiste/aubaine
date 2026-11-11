@@ -5,6 +5,7 @@ import { db } from '@/db';
 import { bookings } from '@/db/schema';
 import { getBooking, HOLD_MINUTES } from './bookings';
 import { bookingCancelledMail, bookingConfirmationMail, sendMail } from './email';
+import { notifyVenueBooking } from './notify';
 import { brusselsDate, capitalize, longDate, timeLabel } from './format';
 import { COMMISSION_PCT } from './pricing';
 
@@ -129,7 +130,7 @@ export async function settleSessionId(sessionId: string) {
 export async function releasePending(bookingId: string, sessionId?: string) {
   await db
     .update(bookings)
-    .set({ status: 'cancelled', cancelledAt: new Date(), expiresAt: null })
+    .set({ status: 'cancelled', cancelledAt: new Date(), expiresAt: null, cancelledBy: 'system' })
     .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'pending'), ...(sessionId ? [eq(bookings.stripeSessionId, sessionId)] : [])));
   if (sessionId) await stripe().checkout.sessions.expire(sessionId).catch(() => {});
 }
@@ -149,7 +150,9 @@ export async function refundBooking(bookingId: string): Promise<boolean> {
 
 export async function sendConfirmation(bookingId: string) {
   const row = await getBooking(bookingId);
-  if (row) await sendMail(bookingConfirmationMail(row)).catch((e) => console.error('[email] confirmation', e));
+  if (!row) return;
+  await sendMail(bookingConfirmationMail(row)).catch((e) => console.error('[email] confirmation', e));
+  await notifyVenueBooking(bookingId, 'new');
 }
 
 export async function sendCancellation(bookingId: string, refunded: boolean) {

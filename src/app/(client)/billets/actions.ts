@@ -6,6 +6,7 @@ import { db } from '@/db';
 import { bookings } from '@/db/schema';
 import { requireUser } from '@/lib/auth';
 import { canCancel, getBooking } from '@/lib/bookings';
+import { notifyVenueBooking } from '@/lib/notify';
 import { refundBooking, sendCancellation } from '@/lib/payments';
 
 export async function cancelAction(form: FormData) {
@@ -26,10 +27,13 @@ export async function cancelAction(form: FormData) {
   }
   const [done] = await db
     .update(bookings)
-    .set({ status: 'cancelled', cancelledAt: new Date() })
+    .set({ status: 'cancelled', cancelledAt: new Date(), cancelledBy: 'client', feeCents: 0 })
     .where(and(eq(bookings.id, id), eq(bookings.status, 'confirmed')))
     .returning({ id: bookings.id });
-  if (done) await sendCancellation(id, refunded);
+  if (done) {
+    await sendCancellation(id, refunded);
+    await notifyVenueBooking(id, 'cancelled');
+  }
   revalidatePath(`/billets/${id}`);
   revalidatePath('/billets');
 }

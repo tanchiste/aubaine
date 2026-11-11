@@ -10,6 +10,7 @@ import { myBookings } from '@/lib/bookings';
 import { brusselsDate, euros, longDate } from '@/lib/format';
 import { cities, firstPhotos } from '@/lib/venues';
 import { logoutAction } from './actions';
+import { DeleteAccount } from './DeleteAccount';
 import { ProfileForm } from './ProfileForm';
 
 export const metadata: Metadata = { title: 'Profil' };
@@ -24,13 +25,19 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   cancelled: { label: 'Annulée', cls: 'pill-muted' },
 };
 
-export default async function ProfilePage() {
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ supprime?: string }> }) {
   const user = await getCurrentUser();
 
   if (!user) {
+    const deleted = (await searchParams).supprime === '1';
     return (
       <div className="section" style={{ paddingTop: 28 }}>
         <h1 className="display" style={{ fontSize: 24 }}>Profil</h1>
+        {deleted && (
+          <p className="notice notice-ok" role="status">
+            Ton compte est supprimé et tes données personnelles sont effacées. Un email de confirmation est parti.
+          </p>
+        )}
         <div className="card stack">
           <b style={{ fontSize: 17 }}>Crée ton compte en 30 secondes</b>
           <p className="muted small">Pour réserver, retrouver tes billets, cumuler des points et parrainer tes amis. Pas de mot de passe : un code par email suffit.</p>
@@ -124,6 +131,19 @@ export default async function ProfilePage() {
       </section>
 
       <ProfileForm v={{ firstName: me.firstName, lastName: me.lastName, phone: me.phone, city: me.city, email: me.email }} cities={cityList.map((c) => c.city)} />
+
+      <section className="card stack" aria-labelledby="data-title" style={{ ['--gap' as string]: '10px' }}>
+        <h2 id="data-title" style={{ fontSize: 16, fontWeight: 800 }}>Mes données</h2>
+        <p className="small muted">
+          Ce qu’on garde et pourquoi : <Link href="/confidentialite">politique de confidentialité</Link>. Tu peux en recevoir une copie ou tout effacer.
+        </p>
+        <div className="row" style={{ flexWrap: 'wrap' }}>
+          <a className="btn btn-sm" href="/api/moi/donnees" download>
+            Télécharger mes données
+          </a>
+          <DeleteAccount />
+        </div>
+      </section>
 
       <nav className="card" style={{ padding: '4px 16px' }} aria-label="Espaces">
         <Link href={mine.length > 0 ? '/pro' : '/inscription?type=exploitant'} className="row" style={{ padding: '12px 0', textDecoration: 'none', color: 'var(--ink)' }}>

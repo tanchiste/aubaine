@@ -5,6 +5,7 @@ import { VenueSwitcher } from '@/components/VenueSwitcher';
 import { IconCompass, IconShield } from '@/components/icons';
 import { getProContext } from '@/lib/pro';
 import { firstPhotos } from '@/lib/venues';
+import { MiniFooter } from '@/components/SiteFooter';
 
 export const metadata = { title: 'Espace exploitant' };
 
@@ -18,7 +19,10 @@ export default async function ProLayout({ children }: { children: React.ReactNod
         <header className="pro-top" style={{ display: 'flex' }}>
           <Logo dark href="/pro" suffix={<em className="small" style={{ fontStyle: 'normal', color: '#B9B4E0', marginLeft: 4 }}>Partenaire</em>} />
         </header>
-        <main className="pro-content" style={{ margin: '0 auto', maxWidth: 560 }}>{children}</main>
+        <main className="pro-content" style={{ margin: '0 auto', maxWidth: 560 }}>
+          {children}
+          <MiniFooter />
+        </main>
       </div>
     );
   }
@@ -77,7 +81,10 @@ export default async function ProLayout({ children }: { children: React.ReactNod
             <VenueSwitcher items={items} currentId={current.venue.id} />
           </div>
         )}
-        <main className="pro-content">{children}</main>
+        <main className="pro-content">
+          {children}
+          <MiniFooter />
+        </main>
         <ProNav variant="tabs" role={navRole} />
       </div>
     </div>

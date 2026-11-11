@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { CodeStep } from '@/components/CodeStep';
 import { CATEGORIES, CATEGORY_KEYS } from '@/lib/categories';
+import { COMMISSION_PCT } from '@/lib/pricing';
 import { signupAction, type SignupState } from './actions';
 
 export function SignupForm({ kind, next }: { kind: 'client' | 'exploitant'; next: string }) {
@@ -48,6 +49,12 @@ export function SignupForm({ kind, next }: { kind: 'client' | 'exploitant'; next
                   <input className="input" name="city" required maxLength={40} defaultValue={v.city ?? 'Mons'} />
                 </label>
               </div>
+              <label className="check-row">
+                <input type="checkbox" name="partnerTerms" required defaultChecked={v.partnerTerms === 'on'} />
+                <span>
+                  J’accepte les <Link href="/conditions-partenaires" target="_blank">conditions partenaires</Link> : commission de {COMMISSION_PCT} % sur les réservations payées, pas d’abonnement.
+                </span>
+              </label>
             </>
           )}
           {state.error && (
@@ -59,7 +66,8 @@ export function SignupForm({ kind, next }: { kind: 'client' | 'exploitant'; next
             {pending ? 'Envoi…' : 'Recevoir mon code'}
           </button>
           <p className="small muted">
-            Pas de mot de passe : on t’envoie un code à 6 chiffres pour confirmer ton email. En créant un compte, tu acceptes les conditions d’utilisation d’Aubaine.
+            Pas de mot de passe : on t’envoie un code à 6 chiffres pour confirmer ton email. En créant un compte, tu acceptes les{' '}
+            <Link href="/conditions" target="_blank">conditions d’utilisation</Link> et la <Link href="/confidentialite" target="_blank">politique de confidentialité</Link> d’Aubaine.
           </p>
           <p className="auth-switch">
             Déjà un compte ? <Link href={loginHref}>Me connecter</Link>

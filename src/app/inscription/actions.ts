@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { VenueCategory } from '@/db/schema';
 import { requestLoginCode, verifyLoginCode, type SignupPayload } from '@/lib/auth';
 import { CATEGORY_KEYS } from '@/lib/categories';
+import { TERMS_VERSION } from '@/lib/legal';
 import { VENUE_COOKIE, createDraftVenue } from '@/lib/pro';
 import { homeFor, safeNext } from '../connexion/actions';
 
@@ -27,6 +28,7 @@ const pro = base.extend({
   venueName: z.string().trim().min(2, 'Indique le nom de ton établissement.').max(60),
   category: z.enum(CATEGORY_KEYS as [VenueCategory, ...VenueCategory[]], { message: 'Choisis ton activité.' }),
   city: z.string().trim().min(2, 'Indique la commune.').max(40),
+  partnerTerms: z.literal('on', { message: 'Pour continuer, accepte les conditions partenaires.' }),
 });
 
 export async function signupAction(prev: SignupState, form: FormData): Promise<SignupState> {
@@ -47,6 +49,8 @@ export async function signupAction(prev: SignupState, form: FormData): Promise<S
       kind,
       firstName: d.firstName,
       venue: kind === 'exploitant' ? { name: d.venueName, category: d.category, city: d.city } : undefined,
+      terms: TERMS_VERSION,
+      partnerTerms: kind === 'exploitant' ? TERMS_VERSION : undefined,
     };
     const r = await requestLoginCode(d.email, payload);
     if (!r.ok) return { step: 'form', kind, values: data, error: r.error, exists: r.reason === 'exists' };

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { onboardingUrl } from '@/lib/connect';
-import { paymentsEnabled } from '@/lib/payments';
+import { connectEnabled } from '@/lib/payments';
 import { getProContext } from '@/lib/pro';
 import { siteUrl } from '@/lib/site';
 
@@ -13,7 +13,7 @@ export async function GET() {
   const { user, current, role } = await getProContext('/pro/paiements');
   if (!current || (role !== 'owner' && !user.isAdmin)) return NextResponse.redirect(new URL('/pro', siteUrl()));
   const account = current.venue.stripeAccountId;
-  if (!paymentsEnabled() || !account) return back();
+  if (!connectEnabled() || !account) return back();
   try {
     return NextResponse.redirect(await onboardingUrl(account));
   } catch (e) {

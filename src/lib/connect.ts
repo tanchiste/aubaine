@@ -3,32 +3,32 @@ import type Stripe from 'stripe';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/db';
 import { venues, type Venue } from '@/db/schema';
-import { paymentsEnabled, stripe } from './payments';
+import { connectEnabled, stripe } from './payments';
 import { siteUrl } from './site';
 
 /**
- * Stripe Connect : chaque établissement a son propre compte Stripe (type Express).
- * Le client paie l'exploitant directement ; Aubaine prélève sa commission au passage et paie les frais Stripe.
- * Aubaine ne détient donc jamais l'argent des clients pour le compte des exploitants.
+ * Mode Stripe Connect, désactivé par défaut (STRIPE_CONNECT=1 pour l'activer) : chaque établissement a son
+ * propre compte Stripe (type Express). Le client paie l'exploitant directement ; Aubaine prélève sa commission
+ * au passage et paie les frais Stripe. Sans ce mode, Aubaine encaisse puis reverse chaque mois (lib/payouts.ts).
  */
 
 type StripeFields = Pick<Venue, 'stripeAccountId' | 'stripeChargesEnabled' | 'stripePayoutsEnabled' | 'stripeBancontact' | 'stripeDetailsSubmitted'>;
 
 /**
- * off : paiements en ligne pas encore ouverts sur Aubaine (paiement simulé)
+ * off : mode Connect inactif (paiement simulé, ou Aubaine encaisse et reverse par virement)
  * none : rien n'est commencé ; incomplete : formulaire Stripe à terminer ; review : Stripe vérifie ; ready : encaissement possible
  */
 export type PaymentState = 'off' | 'none' | 'incomplete' | 'review' | 'ready';
 
 export function paymentState(v: StripeFields): PaymentState {
-  if (!paymentsEnabled()) return 'off';
+  if (!connectEnabled()) return 'off';
   if (!v.stripeAccountId) return 'none';
   if (v.stripeChargesEnabled) return 'ready';
   return v.stripeDetailsSubmitted ? 'review' : 'incomplete';
 }
 
-/** L'établissement peut-il être payé en ligne ? (toujours vrai en paiement simulé) */
-export const acceptsPayments = (v: StripeFields) => !paymentsEnabled() || (!!v.stripeAccountId && v.stripeChargesEnabled);
+/** L'établissement peut-il être payé en ligne ? (toujours vrai hors mode Connect : Aubaine encaisse) */
+export const acceptsPayments = (v: StripeFields) => !connectEnabled() || (!!v.stripeAccountId && v.stripeChargesEnabled);
 
 /** Crée le compte Stripe de l'établissement s'il n'existe pas encore ; renvoie son identifiant */
 export async function ensureAccount(venue: Venue, email: string): Promise<string> {

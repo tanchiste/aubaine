@@ -146,8 +146,11 @@ export const venues = pgTable(
     legalName: text('legal_name'),
     /** Numéro d'entreprise BCE, au format 0123.456.789 */
     companyNumber: text('company_number'),
+    /** Compte qui reçoit les virements mensuels d'Aubaine (mode par défaut : Aubaine encaisse puis reverse) */
+    payoutHolder: text('payout_holder'),
+    payoutIban: text('payout_iban'),
     /**
-     * Compte Stripe Connect de l'exploitant : les clients le paient directement, Aubaine prélève sa commission.
+     * Mode Stripe Connect (désactivé, STRIPE_CONNECT=1) : les clients paient l'exploitant directement.
      * L'état est recopié depuis Stripe (retour d'inscription et webhook account.updated).
      */
     stripeAccountId: text('stripe_account_id').unique(),
@@ -297,8 +300,10 @@ export const bookings = pgTable(
     paymentMethod: text('payment_method'),
     stripeSessionId: text('stripe_session_id').unique(),
     stripePaymentIntent: text('stripe_payment_intent'),
-    /** Compte Stripe de l'exploitant qui a reçu le paiement (vide : ancien paiement encaissé par Aubaine) */
+    /** Mode Stripe Connect : compte de l'exploitant qui a reçu le paiement (vide : encaissé par Aubaine) */
     stripeAccountId: text('stripe_account_id'),
+    /** Virement mensuel qui a reversé cette réservation à l'exploitant */
+    payoutId: uuid('payout_id').references(() => payouts.id, { onDelete: 'set null' }),
     paidAt: ts('paid_at'),
     refundedAt: ts('refunded_at'),
     /** commission Aubaine figée au paiement */
@@ -321,6 +326,33 @@ export const bookings = pgTable(
 export const reportStatus = pgEnum('report_status', ['open', 'resolved', 'dismissed']);
 
 /** Contenu signalé par un visiteur : fiche, photo, prix trompeur… traité par l'équipe Aubaine */
+/**
+ * Virements mensuels d'Aubaine aux exploitants : un par établissement et par mois d'activité.
+ * Les montants et l'IBAN sont figés au moment du virement.
+ */
+export const payouts = pgTable(
+  'payouts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    venueId: uuid('venue_id')
+      .notNull()
+      .references(() => venues.id, { onDelete: 'restrict' }),
+    /** Mois des activités reversées, AAAA-MM (heure de Bruxelles) */
+    month: text('month').notNull(),
+    bookingsCount: integer('bookings_count').notNull(),
+    /** payé par les clients, commission Aubaine, montant viré */
+    totalCents: integer('total_cents').notNull(),
+    feeCents: integer('fee_cents').notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    holder: text('holder'),
+    iban: text('iban').notNull(),
+    reference: text('reference'),
+    paidBy: uuid('paid_by').references(() => users.id, { onDelete: 'set null' }),
+    paidAt: ts('paid_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('payouts_venue_month_uniq').on(t.venueId, t.month)],
+);
+
 export const reports = pgTable(
   'reports',
   {
@@ -350,3 +382,4 @@ export type Booking = typeof bookings.$inferSelect;
 export type VenueStatus = (typeof venueStatus.enumValues)[number];
 export type VenueCategory = (typeof venueCategory.enumValues)[number];
 export type Report = typeof reports.$inferSelect;
+export type Payout = typeof payouts.$inferSelect;

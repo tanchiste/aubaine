@@ -25,8 +25,8 @@ export const COMPANY = {
 export const TERMS_VERSION = '2026-11-11';
 /** Préavis avant une modification des conditions partenaires (règlement P2B : 15 jours minimum) */
 export const PARTNER_NOTICE_DAYS = 15;
-/** Versements aux exploitants, faits par Stripe sur leur compte Stripe Connect (lib/connect.ts) */
-export const PAYOUT = { frequency: 'hebdomadaire', day: 'lundi' };
+/** Virements d'Aubaine aux exploitants : une fois par mois, avant le 10, pour les activités du mois précédent */
+export const PAYOUT = { frequency: 'mensuel', day: 10 };
 
 export const RULES = { cancelHours: CANCEL_HOURS, holdMinutes: HOLD_MINUTES, commissionPct: COMMISSION_PCT };
 
@@ -34,7 +34,7 @@ export const RULES = { cancelHours: CANCEL_HOURS, holdMinutes: HOLD_MINUTES, com
 export const PROVIDERS = [
   { name: 'Vercel Inc.', role: 'Hébergement du site', where: '340 S Lemon Ave #4133, Walnut, CA 91789, États-Unis. Serveurs utilisés : Paris (France)' },
   { name: 'Supabase Inc.', role: 'Base de données', where: 'San Francisco, États-Unis. Données stockées à Paris (France)' },
-  { name: 'Stripe Payments Europe Ltd.', role: 'Paiements (Bancontact, carte, Apple Pay, Google Pay) et versements aux exploitants', where: 'Dublin, Irlande' },
+  { name: 'Stripe Payments Europe Ltd.', role: 'Paiements (Bancontact, carte, Apple Pay, Google Pay)', where: 'Dublin, Irlande' },
   { name: 'Service d’envoi d’emails', role: 'Codes de connexion, confirmations, rappels', where: 'Resend (États-Unis) ou serveur SMTP configuré par Aubaine' },
   { name: 'OpenStreetMap Foundation', role: 'Fonds de carte et recherche d’adresses', where: 'Royaume-Uni' },
 ];

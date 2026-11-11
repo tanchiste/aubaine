@@ -379,8 +379,9 @@ export function checklist(v: Venue, photoCount: number, offerList: Offer[]): Che
       state: v.baseDiscountPct >= MIN_DISCOUNT && v.baseDiscountPct <= MAX_DISCOUNT ? 'ok' : 'ko',
       detail: `Entre −${MIN_DISCOUNT} % et −${MAX_DISCOUNT} %`,
     },
-    // Paiements réels : le compte Stripe de l'établissement doit pouvoir encaisser avant la mise en ligne
-    process.env.STRIPE_SECRET_KEY
+    // Mode Connect : le compte Stripe de l'établissement doit pouvoir encaisser avant la mise en ligne.
+    // Sinon Aubaine encaisse et a besoin de l'IBAN pour les virements mensuels.
+    process.env.STRIPE_SECRET_KEY && process.env.STRIPE_CONNECT === '1'
       ? {
           key: 'paiements',
           label: 'Paiements activés',
@@ -394,9 +395,11 @@ export function checklist(v: Venue, photoCount: number, offerList: Offer[]): Che
         }
       : {
           key: 'paiements',
-          label: 'Paiements',
-          state: 'info',
-          detail: 'Paiement simulé pendant la phase de test : le compte bancaire se relie à l’ouverture des paiements',
+          label: 'IBAN pour tes virements',
+          state: v.payoutIban ? 'ok' : process.env.STRIPE_SECRET_KEY ? 'ko' : 'info',
+          detail: v.payoutIban
+            ? `Virements mensuels sur ${v.payoutIban.slice(0, 4)} •••• ${v.payoutIban.slice(-4)}`
+            : 'Indique le compte qui reçoit tes virements, dans Paiements',
         },
   ];
 }

@@ -3,11 +3,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 /** Onglets du back-office, avec le nombre d'éléments en attente */
-export function AdminTabs({ pendingVenues, openReports }: { pendingVenues: number; openReports: number }) {
+export function AdminTabs({ pendingVenues, openReports, pendingPayouts }: { pendingVenues: number; openReports: number; pendingPayouts: number }) {
   const path = usePathname();
   const tabs = [
     { href: '/admin', label: 'Établissements', n: pendingVenues, active: path === '/admin' },
     { href: '/admin/signalements', label: 'Signalements', n: openReports, active: path.startsWith('/admin/signalements') },
+    { href: '/admin/virements', label: 'Virements', n: pendingPayouts, active: path.startsWith('/admin/virements') },
   ];
   return (
     <nav className="row" style={{ ['--gap' as string]: '24px' }} aria-label="Back-office">

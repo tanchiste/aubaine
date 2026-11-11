@@ -293,7 +293,9 @@ try {
   await partner.click('.slot-editor button:has-text("Enregistrer")');
   await partner.waitForSelector('text=Créneau mis à jour.');
   await partner.reload();
-  ok(await partner.locator(`.slot-card:has-text("${slotTime}"):has-text("La Prison") .slot-pct:has-text("−50 %")`).isVisible(), 'Créneau modifié : la remise passe à −50 %');
+  await settled(partner);
+  await partner.locator(`.slot-card:has-text("${slotTime}"):has-text("La Prison") .slot-pct:has-text("−50 %")`).waitFor({ timeout: 8000 });
+  ok(true, 'Créneau modifié : la remise passe à −50 %');
   await shot(partner, '06-pro-creneaux');
 
   // 6. Un nouveau client réserve (connexion au milieu du parcours)

@@ -21,14 +21,18 @@ export const commissionOf = (totalCents: number) => Math.round((totalCents * COM
 /**
  * Paiement en ligne avec Stripe Checkout : Bancontact et carte (Apple Pay et Google Pay compris).
  * Sans STRIPE_SECRET_KEY, l'app garde le paiement simulé de la phase de test.
- * Le paiement va au compte Stripe Connect de l'établissement (lib/connect.ts) : Aubaine prélève sa commission
- * au passage (application fee) et paie les frais Stripe. La commission est aussi figée sur la réservation (fee_cents).
+ *
+ * Mode par défaut : Aubaine encaisse sur son compte Stripe, au nom de l'exploitant, et lui vire chaque mois
+ * les activités du mois précédent, commission déduite (lib/payouts.ts).
+ * Mode Stripe Connect (STRIPE_CONNECT=1) : le paiement va directement au compte Stripe de l'exploitant (lib/connect.ts).
+ * Dans les deux cas, la commission est figée sur la réservation (fee_cents).
  */
 export const paymentsEnabled = () => !!process.env.STRIPE_SECRET_KEY;
+export const connectEnabled = () => paymentsEnabled() && process.env.STRIPE_CONNECT === '1';
 
 /** Avant d'ouvrir le paiement : l'établissement de ce créneau a-t-il un compte Stripe prêt ? */
 export async function slotPayable(slotId: string): Promise<boolean> {
-  if (!paymentsEnabled()) return true;
+  if (!connectEnabled()) return true;
   const [row] = await db
     .select({ account: venues.stripeAccountId, ready: venues.stripeChargesEnabled })
     .from(slots)
@@ -60,26 +64,26 @@ export async function startCheckout(bookingId: string): Promise<string> {
   const row = await getBooking(bookingId);
   if (!row || row.booking.status !== 'pending') throw new Error('Réservation introuvable');
   const { booking, slot, venue, offer, user } = row;
-  const account = venue.stripeAccountId;
-  if (!account || !venue.stripeChargesEnabled) throw new NotPayableError();
+  // Mode Connect : le paiement va au compte Stripe de l'exploitant, qui doit pouvoir encaisser
+  const connect = connectEnabled();
+  const account = connect ? venue.stripeAccountId : null;
+  if (connect && (!account || !venue.stripeChargesEnabled)) throw new NotPayableError();
   const when = `${capitalize(longDate(brusselsDate(slot.startsAt)))} à ${timeLabel(slot.startsAt)}`;
   const session = await stripe().checkout.sessions.create(
     {
       mode: 'payment',
       currency: 'eur',
       locale: 'fr',
-      // Carte (Apple Pay et Google Pay compris) ; Bancontact dès que Stripe l'a activé pour ce lieu
-      allowed_payment_method_types: venue.stripeBancontact ? ['bancontact', 'card'] : ['card'],
+      // Carte (Apple Pay et Google Pay compris) et Bancontact (en mode Connect, dès que Stripe l'a activé pour ce lieu)
+      allowed_payment_method_types: !connect || venue.stripeBancontact ? ['bancontact', 'card'] : ['card'],
       customer_email: user.email,
       client_reference_id: booking.id,
       metadata: { booking_id: booking.id, code: booking.code },
       payment_intent_data: {
         description: `${venue.name} · ${when} · ${booking.code}`,
         metadata: { booking_id: booking.id, venue_id: venue.id },
-        // L'exploitant est le vendeur (son nom sur le relevé du client) et reçoit le montant, commission déduite
-        on_behalf_of: account,
-        transfer_data: { destination: account },
-        application_fee_amount: commissionOf(booking.totalCents),
+        // Mode Connect : l'exploitant est le vendeur et reçoit le montant, commission déduite
+        ...(account ? { on_behalf_of: account, transfer_data: { destination: account }, application_fee_amount: commissionOf(booking.totalCents) } : {}),
       },
       line_items: [
         {

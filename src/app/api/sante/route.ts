@@ -15,8 +15,11 @@ export async function GET(req: Request) {
     paiements: env.STRIPE_SECRET_KEY ? (env.STRIPE_SECRET_KEY.startsWith('sk_live') ? 'Stripe (réels)' : 'Stripe (test)') : 'simulés',
     ...(env.STRIPE_SECRET_KEY
       ? {
+          versementsExploitants: env.STRIPE_CONNECT === '1' ? 'Stripe Connect' : 'virements mensuels par Aubaine',
           webhookPaiements: env.STRIPE_WEBHOOK_SECRET ? 'configuré' : 'STRIPE_WEBHOOK_SECRET absent',
-          webhookComptesExploitants: env.STRIPE_CONNECT_WEBHOOK_SECRET ? 'configuré' : 'STRIPE_CONNECT_WEBHOOK_SECRET absent (état relu à chaque visite de la page Paiements)',
+          ...(env.STRIPE_CONNECT === '1'
+            ? { webhookComptesExploitants: env.STRIPE_CONNECT_WEBHOOK_SECRET ? 'configuré' : 'STRIPE_CONNECT_WEBHOOK_SECRET absent (état relu à chaque visite de la page Paiements)' }
+            : {}),
         }
       : {}),
     codesAffichesALEcran: env.AUTH_DEV_CODES === '1',

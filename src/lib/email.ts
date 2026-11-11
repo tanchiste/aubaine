@@ -1,6 +1,6 @@
 import 'server-only';
 import nodemailer from 'nodemailer';
-import type { Booking, Offer, Slot, Venue } from '@/db/schema';
+import type { Booking, Offer, Payout, Slot, Venue } from '@/db/schema';
 import { CANCEL_HOURS } from './bookings-rules';
 import { isAdminEmail } from './env';
 import { companyLine } from './legal';
@@ -405,4 +405,54 @@ async function diagnoseSmtp(smtp: string): Promise<{ ok: boolean; detail: string
     if (['ETIMEDOUT', 'ECONNECTION', 'ESOCKET', 'EDNS', 'ECONNREFUSED'].includes(code ?? '')) return { ok: false, detail: `serveur ${url.hostname}:${url.port || '465'} injoignable (${code})` };
     return { ok: false, detail: `erreur inattendue${code ? ` (${code})` : ''}${server ? ` : ${server}` : ''}` };
   }
+}
+
+/* ---------- Virements aux exploitants ---------- */
+
+const maskIban = (iban: string) => `${iban.slice(0, 4)} •••• •••• ${iban.slice(-4)}`;
+
+/** Virement mensuel envoyé : montant, détail et période */
+export function payoutMail(venue: Venue, payout: Payout, month: string, to: string): Mail {
+  const subject = `Virement Aubaine : ${euros(payout.amountCents)} pour ${month}`;
+  const rows: [string, string][] = [
+    ['Activités', `${payout.bookingsCount} réservation${payout.bookingsCount > 1 ? 's' : ''}`],
+    ['Payé par les clients', euros(payout.totalCents)],
+    ['Commission Aubaine', `−${euros(payout.feeCents)}`],
+    ['Viré sur ton compte', euros(payout.amountCents)],
+    ['Compte', maskIban(payout.iban)],
+    ...(payout.reference ? ([['Communication', h(payout.reference)]] as [string, string][]) : []),
+  ];
+  return {
+    to,
+    subject,
+    text: `Bonjour,
+
+Aubaine vient de virer ${euros(payout.amountCents)} pour les activités de ${month} chez ${venue.name} (${payout.bookingsCount} réservations, ${euros(payout.totalCents)} payés par les clients, commission ${euros(payout.feeCents)}), sur le compte ${maskIban(payout.iban)}.
+Comptez 1 à 2 jours ouvrables selon votre banque.
+
+Relevé détaillé : ${app()}/pro/paiements`,
+    html: layout(
+      `${euros(payout.amountCents)} virés pour ${h(month)}`,
+      `${para(`Aubaine vient de virer le montant des activités de <b>${h(month)}</b> chez <b>${h(venue.name)}</b>. Compte 1 à 2 jours ouvrables selon ta banque.`)}${detailsRows(rows)}${btn(`${app()}/pro/paiements`, 'Voir mes relevés')}`,
+      venueFooter(venue),
+    ),
+  };
+}
+
+/** Alerte de sécurité : le compte qui reçoit les virements a changé */
+export function ibanChangedMail(venue: Venue, iban: string, by: string, to: string): Mail {
+  return {
+    to,
+    subject: `IBAN modifié pour ${venue.name}`,
+    text: `L'IBAN qui reçoit les virements d'Aubaine pour ${venue.name} a été modifié par ${by}. Nouveau compte : ${maskIban(iban)}.
+
+Si ce n'est pas toi ou ton équipe, réponds tout de suite à cet email : aucun virement ne partira vers ce compte avant vérification.
+
+${app()}/pro/paiements`,
+    html: layout(
+      'IBAN modifié',
+      `${para(`L’IBAN qui reçoit les virements d’Aubaine pour <b>${h(venue.name)}</b> a été modifié par ${h(by)}.`)}${detailsRows([['Nouveau compte', maskIban(iban)]])}${para('Si ce n’est pas toi ou ton équipe, réponds tout de suite à cet email : aucun virement ne partira vers ce compte avant vérification.', ';font-size:13px;color:#6B6882')}`,
+      venueFooter(venue),
+    ),
+  };
 }

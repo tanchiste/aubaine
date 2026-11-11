@@ -1,11 +1,15 @@
 // Paiements Stripe (Bancontact, carte) contre stripe-mock, le serveur de test officiel de Stripe.
+// Par défaut, Aubaine encaisse et vire chaque mois (section 9) ; avec STRIPE_CONNECT=1 (serveur et test),
+// le paiement va au compte Stripe de l'exploitant (sections 7 et 8).
 // Usage :
 //   stripe-mock -http-port 12111
 //   STRIPE_SECRET_KEY=sk_test_123 STRIPE_WEBHOOK_SECRET=whsec_test STRIPE_CONNECT_WEBHOOK_SECRET=whsec_connect \
 //     STRIPE_API_BASE=http://localhost:12111 AUTH_DEV_CODES=1 ADMIN_DEV_CODES=1 npx next start
 //   DATABASE_URL=… node tests/payments.mjs
 // La page Stripe elle-même n'est pas joignable ici : le test simule son résultat avec des webhooks signés.
+// LOG=chemin du journal du serveur : vérifie aussi les emails (affichés dans le journal sans serveur d'envoi).
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const Stripe = require('stripe');
@@ -15,6 +19,9 @@ const BASE = process.env.BASE ?? 'http://localhost:3000';
 const SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? 'whsec_test';
 const CONNECT_SECRET = process.env.STRIPE_CONNECT_WEBHOOK_SECRET ?? 'whsec_connect';
 const ACCT = 'acct_kartohm_test';
+const CONNECT = process.env.STRIPE_CONNECT === '1';
+const LOG = process.env.LOG;
+const ADMIN = (process.env.ADMIN_EMAILS ?? '').split(',')[0].trim();
 /** Compte Stripe de l'exploitant tel que Stripe l'envoie (account.updated) */
 const account = (caps, extra = {}) => ({ id: ACCT, object: 'account', charges_enabled: true, payouts_enabled: true, details_submitted: true, capabilities: caps, ...extra });
 const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1 });
@@ -74,7 +81,7 @@ try {
   const { b, url } = await book(page);
   ok(/stripe\.com/.test(url), 'Payer envoie vers la page de paiement Stripe');
   ok(b.status === 'pending' && b.stripe_session_id && b.expires_at > new Date(), 'Réservation en attente avec places tenues pendant le paiement');
-  ok(b.stripe_account_id === ACCT, 'Paiement destiné au compte Stripe de l’exploitant');
+  ok(CONNECT ? b.stripe_account_id === ACCT : b.stripe_account_id === null, CONNECT ? 'Paiement destiné au compte Stripe de l’exploitant' : 'Paiement encaissé par Aubaine (pas de compte Stripe exploitant)');
   await page.goto(`${BASE}/billets/${b.id}`);
   ok(await page.locator('text=Paiement en cours de validation').isVisible(), 'Avant paiement : pas de billet utilisable');
 
@@ -114,6 +121,7 @@ try {
   const [expired] = await sql`select status from bookings where id = ${third.b.id}`;
   ok(expired.status === 'cancelled', 'Session expirée : places libérées');
 
+  if (CONNECT) {
   // 7. Comptes exploitants : l'état suit Stripe (webhook des comptes connectés, secret à part)
   ok((await webhook('account.updated', account({ card_payments: 'active', transfers: 'active', bancontact_payments: 'pending' }), CONNECT_SECRET, ACCT)).ok, 'Webhook des comptes exploitants accepté (second secret)');
   let [venue] = await sql`select * from venues where slug = 'kartohm'`;
@@ -165,6 +173,89 @@ try {
   const relink = pro.waitForRequest((r) => /stripe\.(com|me)/.test(r.url()));
   await pro.goto(`${BASE}/pro/paiements/lien`).catch(() => {});
   ok(/stripe\.(com|me)/.test((await relink).url()), 'Lien expiré : un nouveau lien Stripe est créé');
+  } else {
+  // 9. Mode par défaut : l'exploitant donne son IBAN, Aubaine vire chaque mois
+  const pro = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const proEmail = `pro.${Date.now().toString(36)}@test.be`;
+  await pro.goto(`${BASE}/inscription?type=exploitant`);
+  await pro.fill('input[name=firstName]', 'Marc');
+  await pro.fill('input[name=email]', proEmail);
+  await pro.fill('input[name=venueName]', 'Bowling du Test');
+  await pro.selectOption('select[name=category]', 'bowling');
+  await pro.check('input[name=partnerTerms]');
+  await pro.click('button:has-text("Recevoir mon code")');
+  await pro.fill('input[name=code]', (await pro.locator('[data-testid=dev-code] b').textContent()).trim());
+  await pro.click('button:has-text("Créer mon compte")');
+  await pro.waitForURL(/\/pro/);
+  await pro.goto(`${BASE}/pro/etablissement`);
+  await pro.locator('text=Indique le compte qui reçoit tes virements').first().waitFor({ timeout: 8000 });
+  ok(true, 'Liste de mise en ligne : IBAN demandé');
+  await pro.goto(`${BASE}/pro/paiements`);
+  ok((await pro.locator('[data-testid=pay-state]').textContent()).includes('À renseigner'), 'Page Paiements : IBAN à renseigner');
+  await pro.fill('input[name=holder]', 'Bowling du Test SRL');
+  await pro.fill('input[name=iban]', 'BE68 5390 0754 7035');
+  await pro.click('button:has-text("Enregistrer")');
+  await pro.locator('text=Cet IBAN n’est pas valide').waitFor({ timeout: 8000 });
+  ok(true, 'IBAN à la clé fausse refusé');
+  await pro.fill('input[name=iban]', 'be68 5390 0754 7034');
+  await pro.click('button:has-text("Enregistrer")');
+  await pro.locator('[data-testid=iban]').waitFor({ timeout: 8000 });
+  ok((await pro.locator('[data-testid=iban]').textContent()).trim() === 'BE68 5390 0754 7034', 'IBAN enregistré et affiché par groupes de 4');
+  await pro.click('button:has-text("Modifier")');
+  await pro.fill('input[name=iban]', 'BE71 0961 2345 6769');
+  await pro.click('button:has-text("Enregistrer")');
+  await pro.locator('[data-testid=iban]:has-text("BE71")').waitFor({ timeout: 8000 });
+  const events = await sql`select e.action from venue_events e join venue_members m on m.venue_id = e.venue_id join users u on u.id = m.user_id where u.email = ${proEmail} and e.action = 'payout_iban'`;
+  ok(events.length === 2, 'Changements d’IBAN journalisés');
+  if (LOG) ok(readFileSync(LOG, 'utf8').includes(`[email] à ${proEmail} · IBAN modifié`), 'IBAN modifié : les gérants sont prévenus par email');
+
+  // Une activité payée le mois dernier chez Kart'Ohm, à reverser
+  const now = new Date();
+  const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+  const [kart] = await sql`select v.id, (select id from offers where venue_id = v.id order by created_at limit 1) as offer from venues v where slug = 'kartohm'`;
+  await sql`update bookings set payout_id = null where payout_id in (select id from payouts where venue_id = ${kart.id} and month = ${prev})`;
+  await sql`delete from payouts where venue_id = ${kart.id} and month = ${prev}`;
+  await sql`update venues set payout_holder = 'Kart Ohm SRL', payout_iban = 'BE68539007547034' where id = ${kart.id}`;
+  const startsAt = new Date(`${prev}-14T09:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}:00Z`);
+  const [past] = await sql`insert into slots (venue_id, offer_id, starts_at, capacity, discount_pct) values (${kart.id}, ${kart.offer}, ${startsAt}, 8, 30)
+    on conflict do nothing returning id`;
+  const [client] = await sql`select id from users where email = ${email}`;
+  if (past) {
+    await sql`insert into bookings (code, slot_id, venue_id, user_id, people, full_cents, discount_pct, total_cents, status, paid_at, payment_method, stripe_payment_intent, fee_cents, checked_in_at)
+      values (${'V' + Date.now().toString(36).toUpperCase().slice(-5)}, ${past.id}, ${kart.id}, ${client.id}, 2, 4400, 30, 3080, 'checked_in', ${startsAt}, 'bancontact', 'pi_test_virement', 462, ${startsAt})`;
+  }
+  const [due] = await sql`select count(*)::int as n, sum(b.total_cents - b.fee_cents)::int as net from bookings b join slots s on s.id = b.slot_id
+    where b.venue_id = ${kart.id} and b.status in ('confirmed', 'checked_in', 'no_show') and b.paid_at is not null and b.refunded_at is null
+    and b.stripe_account_id is null and b.payment_method <> 'simulé' and to_char(s.starts_at at time zone 'Europe/Brussels', 'YYYY-MM') = ${prev}`;
+
+  // Le back-office montre le montant à virer, l'exporte, et l'enregistre une fois versé
+  const admin = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await admin.goto(`${BASE}/connexion?suite=${encodeURIComponent('/admin/virements?mois=' + prev)}`);
+  await admin.fill('input[name=email]', ADMIN);
+  await admin.click('button:has-text("Recevoir mon code")');
+  await admin.fill('input[name=code]', (await admin.locator('[data-testid=dev-code] b').textContent()).trim());
+  await admin.click('button:has-text("Me connecter")');
+  await admin.waitForURL(/\/admin\/virements/);
+  const row = admin.locator('[data-testid=payout-row]', { hasText: 'Kart' });
+  await row.waitFor({ timeout: 8000 });
+  const euro = (c) => new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(c / 100);
+  ok((await row.textContent()).replace(/\s/g, ' ').includes(euro(due.net).replace(/\s/g, ' ')), `Virements : ${euro(due.net)} à virer à Kart’Ohm pour ${prev} (${due.n} réservation(s), commission déduite)`);
+  const csv = await admin.evaluate(async (m) => (await fetch(`/admin/virements/export?mois=${m}`)).text(), prev);
+  ok(csv.includes('BE68 5390 0754 7034') && csv.includes((due.net / 100).toFixed(2).replace('.', ',')) && csv.includes(`Aubaine ${prev} Kart`), 'Export CSV : IBAN, montant et communication');
+  await row.locator('button:has-text("Marquer comme versé")').click();
+  // La ligne se met à jour toute seule : « Enregistré », puis « Viré le … » une fois la page rafraîchie
+  await row.locator('text=/Enregistré|Viré le/').first().waitFor({ timeout: 8000 });
+  const [payout] = await sql`select * from payouts where venue_id = ${kart.id} and month = ${prev}`;
+  const [linked] = await sql`select count(*)::int as n from bookings where payout_id = ${payout.id}`;
+  ok(payout.amount_cents === due.net && linked.n === due.n && payout.iban === 'BE68539007547034', 'Virement enregistré : montant et IBAN figés, réservations rattachées');
+  await admin.reload();
+  await admin.locator('[data-testid=payout-row]', { hasText: 'Kart' }).locator('text=Viré le').waitFor({ timeout: 8000 });
+  ok(true, 'Après rechargement : « Viré le … », plus de bouton');
+  if (LOG) ok(readFileSync(LOG, 'utf8').includes('Virement Aubaine : '), 'Email de virement envoyé au gérant');
+  ok((await admin.evaluate(async () => (await fetch('/admin/virements/export')).status)) === 200, 'Export sans mois : mois écoulé par défaut');
+  const anon = await (await fetch(`${BASE}/admin/virements/export?mois=${prev}`, { redirect: 'manual' })).status;
+  ok(anon !== 200, 'Export fermé aux visiteurs non connectés');
+  }
   console.log('\nPaiements : tout est bon.');
 } finally {
   await browser.close();

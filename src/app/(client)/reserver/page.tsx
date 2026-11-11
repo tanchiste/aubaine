@@ -9,7 +9,7 @@ import { euros, longDate, brusselsDate, timeLabel } from '@/lib/format';
 import { quote } from '@/lib/pricing';
 import { firstPhotos } from '@/lib/venues';
 import { getCurrentUser } from '@/lib/auth';
-import { paymentsEnabled } from '@/lib/payments';
+import { connectEnabled, paymentsEnabled } from '@/lib/payments';
 import { acceptsPayments } from '@/lib/connect';
 import { CANCEL_HOURS } from '@/lib/bookings-rules';
 import { BookForm } from './BookForm';
@@ -66,7 +66,7 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
           total={euros(price.total)}
           needName={!user.firstName}
           online={paymentsEnabled()}
-          bancontact={venue.stripeBancontact}
+          bancontact={!connectEnabled() || venue.stripeBancontact}
           cancelHours={CANCEL_HOURS}
         />
       ) : (
@@ -83,7 +83,7 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
       <p className="small muted legal-line">
         Activité fournie par <b>{venue.legalName ?? venue.name}</b>
         {venue.companyNumber ? `, n° d’entreprise ${venue.companyNumber}` : ''}
-        {paymentsEnabled() ? ', à qui ton paiement est versé via Stripe' : ''}. Aubaine prend la réservation en son nom.
+        {connectEnabled() ? ', à qui ton paiement est versé via Stripe. Aubaine prend la réservation en son nom.' : '. Aubaine prend la réservation et encaisse le paiement en son nom.'}
       </p>
     </div>
   );

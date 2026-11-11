@@ -10,6 +10,7 @@ import { COMMISSION_PCT } from '@/lib/pricing';
 import { getProContext } from '@/lib/pro';
 import { checklist, isReady, offersOf } from '@/lib/venues';
 import { paymentState } from '@/lib/connect';
+import { connectEnabled } from '@/lib/payments';
 import { togglePauseAction } from './actions';
 import { CreateVenueForm } from './CreateVenueForm';
 import { CheckInBox } from './CheckInBox';
@@ -99,6 +100,11 @@ export default async function ProHome() {
           <p className="notice notice-primary">
             {paymentState(v) === 'review' ? 'Stripe vérifie tes informations bancaires.' : 'Relie ton compte bancaire pour encaisser les réservations.'}{' '}
             <Link href="/pro/paiements">Paiements</Link>
+          </p>
+        )}
+        {!connectEnabled() && !v.payoutIban && v.status !== 'rejected' && (
+          <p className="notice notice-primary">
+            Indique ton IBAN pour recevoir tes virements mensuels. <Link href="/pro/paiements">Paiements</Link>
           </p>
         )}
 

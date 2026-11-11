@@ -27,7 +27,7 @@ export default function LegalNotice() {
       <h2>Ce que fait Aubaine</h2>
       <p>
         Aubaine est une plateforme de réservation qui met en relation des particuliers et des exploitants de loisirs (karting, escape game, bowling, bien-être…) pour leurs heures creuses. Les
-        activités sont fournies par les exploitants, identifiés sur chaque fiche. Aubaine prend la réservation en leur nom ; le paiement leur est versé par notre prestataire Stripe, commission d’Aubaine déduite. Le détail figure dans les{' '}
+        activités sont fournies par les exploitants, identifiés sur chaque fiche. Aubaine prend la réservation et encaisse le paiement en leur nom, puis le leur reverse chaque mois, commission déduite. Le détail figure dans les{' '}
         <Link href="/conditions">conditions d’utilisation et de réservation</Link> et les <Link href="/conditions-partenaires">conditions partenaires</Link>.
       </p>
 

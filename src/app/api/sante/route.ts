@@ -13,6 +13,12 @@ export async function GET(req: Request) {
     emails: env.SMTP_URL ? 'smtp' : env.RESEND_API_KEY ? 'resend' : 'non configurés (codes dans les logs)',
     rappelsQuotidiens: env.CRON_SECRET ? 'configurés' : 'CRON_SECRET absent',
     paiements: env.STRIPE_SECRET_KEY ? (env.STRIPE_SECRET_KEY.startsWith('sk_live') ? 'Stripe (réels)' : 'Stripe (test)') : 'simulés',
+    ...(env.STRIPE_SECRET_KEY
+      ? {
+          webhookPaiements: env.STRIPE_WEBHOOK_SECRET ? 'configuré' : 'STRIPE_WEBHOOK_SECRET absent',
+          webhookComptesExploitants: env.STRIPE_CONNECT_WEBHOOK_SECRET ? 'configuré' : 'STRIPE_CONNECT_WEBHOOK_SECRET absent (état relu à chaque visite de la page Paiements)',
+        }
+      : {}),
     codesAffichesALEcran: env.AUTH_DEV_CODES === '1',
     mentionsLegales: companyReady() ? 'complètes' : 'à compléter',
   };

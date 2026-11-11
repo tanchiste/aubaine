@@ -59,7 +59,8 @@ export default function Privacy() {
       </div>
       <p>
         Pour les exploitants, nous utilisons aussi les informations de l’établissement et de l’équipe (nom, email, rôle, nom légal, numéro d’entreprise) pour exécuter les{' '}
-        <Link href="/conditions-partenaires">conditions partenaires</Link>.
+        <Link href="/conditions-partenaires">conditions partenaires</Link>. Pour activer les paiements, l’exploitant transmet directement à Stripe son identité, celle de son entreprise et son
+        IBAN : Stripe en est responsable (obligations de vérification), et Aubaine n’en reçoit que l’état du compte (activé ou non).
       </p>
 
       <h2>Les emails que tu reçois</h2>

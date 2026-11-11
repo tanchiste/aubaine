@@ -6,7 +6,7 @@ import { db } from '@/db';
 import { users } from '@/db/schema';
 import { requireUser } from '@/lib/auth';
 import { BookingError, createBooking } from '@/lib/bookings';
-import { paymentsEnabled, releasePending, sendConfirmation, startCheckout } from '@/lib/payments';
+import { NotPayableError, paymentsEnabled, releasePending, sendConfirmation, slotPayable, startCheckout } from '@/lib/payments';
 
 export type BookState = { error?: string };
 
@@ -18,6 +18,7 @@ export async function bookAction(_prev: BookState, form: FormData): Promise<Book
   if (!user.firstName && !firstName) return { error: 'Indique ton prénom : il s’affiche à l’accueil.' };
   if (!/^[0-9a-f-]{36}$/i.test(slotId) || !Number.isFinite(people)) return { error: 'Réservation invalide.' };
   const online = paymentsEnabled();
+  if (online && !(await slotPayable(slotId))) return { error: new NotPayableError().message };
 
   let id: string;
   let payUrl: string | null = null;
@@ -30,9 +31,9 @@ export async function bookAction(_prev: BookState, form: FormData): Promise<Book
       try {
         payUrl = await startCheckout(booking.id);
       } catch (e) {
-        console.error('[stripe] ouverture du paiement', e);
+        if (!(e instanceof NotPayableError)) console.error('[stripe] ouverture du paiement', e);
         await releasePending(booking.id);
-        return { error: 'Le paiement n’a pas pu s’ouvrir. Réessaie dans un instant.' };
+        return { error: e instanceof NotPayableError ? e.message : 'Le paiement n’a pas pu s’ouvrir. Réessaie dans un instant.' };
       }
     } else {
       await sendConfirmation(booking.id);

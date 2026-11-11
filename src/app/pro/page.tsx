@@ -9,6 +9,7 @@ import { brusselsDate, euros, longDate, capitalize, timeLabel } from '@/lib/form
 import { COMMISSION_PCT } from '@/lib/pricing';
 import { getProContext } from '@/lib/pro';
 import { checklist, isReady, offersOf } from '@/lib/venues';
+import { paymentState } from '@/lib/connect';
 import { togglePauseAction } from './actions';
 import { CreateVenueForm } from './CreateVenueForm';
 import { CheckInBox } from './CheckInBox';
@@ -94,6 +95,12 @@ export default async function ProHome() {
         {v.status === 'rejected' && <p className="notice notice-deal">{v.reviewMessage ?? 'Cette fiche n’a pas été retenue.'} Écris-nous pour en discuter.</p>}
         {v.status === 'published' && <p className="notice notice-ok">Ta fiche est en ligne : les clients voient tes créneaux creux.</p>}
         {v.status === 'paused' && <p className="notice notice-amber">Fiche en pause : elle est invisible pour les clients.</p>}
+        {['none', 'incomplete', 'review'].includes(paymentState(v)) && v.status !== 'rejected' && (
+          <p className="notice notice-primary">
+            {paymentState(v) === 'review' ? 'Stripe vérifie tes informations bancaires.' : 'Relie ton compte bancaire pour encaisser les réservations.'}{' '}
+            <Link href="/pro/paiements">Paiements</Link>
+          </p>
+        )}
 
         {(v.status === 'draft' || v.status === 'changes_requested') && <Checklist items={items} />}
 

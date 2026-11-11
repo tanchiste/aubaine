@@ -48,7 +48,7 @@ export default async function ProLayout({ children }: { children: React.ReactNod
         {navRole === 'owner' && (
         <div style={{ marginTop: 'auto', padding: 14, borderRadius: 14, background: 'rgba(255,178,26,0.1)' }}>
           <b className="small" style={{ color: 'var(--amber)', letterSpacing: '0.04em' }}>FORMULE DÉCOUVERTE</b>
-          <p className="small" style={{ color: '#E4E1F5', marginTop: 4 }}>15 % par réservation honorée. Rien à payer si personne ne vient.</p>
+          <p className="small" style={{ color: '#E4E1F5', marginTop: 4 }}>15 % par réservation payée, frais bancaires compris. Rien à payer si personne ne réserve.</p>
         </div>
         )}
         <div className="row" style={{ padding: '0 6px', marginTop: navRole === 'owner' ? 0 : 'auto' }}>

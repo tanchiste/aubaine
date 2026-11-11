@@ -14,8 +14,9 @@ export default function PartnerTerms() {
     <>
       <DocHead title="Conditions partenaires">
         <p>
-          <b>L’essentiel :</b> vous vendez vos heures creuses sur Aubaine, à la remise que vous choisissez. Aubaine encaisse pour vous et vous reverse chaque mois les montants des activités
-          réalisées, moins une commission de {RULES.commissionPct} %. Pas d’abonnement, pas de frais d’entrée. Vous pouvez mettre votre fiche en pause ou arrêter quand vous voulez.
+          <b>L’essentiel :</b> vous vendez vos heures creuses sur Aubaine, à la remise que vous choisissez. Les clients vous paient en ligne, via votre compte Stripe, et vous recevez
+          chaque semaine le montant moins une commission de {RULES.commissionPct} %. Pas d’abonnement, pas de frais d’entrée, frais bancaires de Stripe compris. Vous pouvez mettre votre fiche
+          en pause ou arrêter quand vous voulez.
         </p>
       </DocHead>
 
@@ -58,16 +59,31 @@ export default function PartnerTerms() {
         remboursé en entier et prévenu par email ; aucune commission n’est due. Des annulations répétées sans motif sérieux peuvent entraîner une suspension.
       </p>
 
-      <h2>6. Encaissement, reversement et commission</h2>
+      <h2>6. Paiement, versements et commission</h2>
       <ul>
-        <li>Aubaine encaisse le paiement du client au nom et pour le compte de l’exploitant, par l’intermédiaire de son prestataire de paiement (Stripe).</li>
         <li>
-          Aubaine reverse les montants encaissés pour les activités réalisées le mois précédent, par virement {PAYOUT.frequency} sur le compte indiqué par l’exploitant, au plus tard le{' '}
-          {PAYOUT.delayDays} du mois, avec un relevé détaillé.
+          Pour recevoir des réservations, l’exploitant ouvre un compte de paiement chez Stripe (Stripe Payments Europe Ltd.) depuis son espace, page Paiements, et accepte à cette occasion
+          le{' '}
+          <a href="https://stripe.com/legal/connect-account" target="_blank" rel="noreferrer">
+            contrat de compte connecté Stripe
+          </a>
+          . Stripe vérifie son identité et son entreprise, comme la loi l’impose ; Aubaine n’a pas accès à ses pièces ni à son IBAN.
         </li>
         <li>
-          La commission d’Aubaine est de <b>{RULES.commissionPct} % du montant payé par le client</b> (TVA en sus le cas échéant). Elle est déduite du reversement et facturée chaque mois. Elle
-          n’est pas due sur une réservation annulée et remboursée.
+          Le client paie en ligne (Bancontact, carte, Apple Pay, Google Pay) au nom de l’exploitant, qui est le vendeur de l’activité. Le montant est crédité sur son compte Stripe : Aubaine ne
+          détient jamais les fonds des clients.
+        </li>
+        <li>
+          Stripe vire le solde disponible sur le compte bancaire de l’exploitant selon un rythme {PAYOUT.frequency}, le {PAYOUT.day}. Le premier virement peut prendre quelques jours de plus. Les
+          virements et relevés sont consultables dans l’espace Stripe de l’exploitant.
+        </li>
+        <li>
+          La commission d’Aubaine est de <b>{RULES.commissionPct} % du montant payé par le client</b> (TVA en sus le cas échéant). Elle est prélevée automatiquement au moment du paiement et
+          récapitulée chaque mois sur une facture. Les frais de traitement de Stripe sont à la charge d’Aubaine.
+        </li>
+        <li>
+          En cas d’annulation remboursée (par le client dans les délais, ou par l’exploitant), le client est remboursé en entier : le montant est repris sur le solde Stripe de l’exploitant et
+          la commission lui est rendue. Si le solde ne suffit pas, la somme est déduite des virements suivants.
         </li>
         <li>Aucun abonnement ni frais d’inscription. Toute évolution du tarif suit l’article 11.</li>
       </ul>

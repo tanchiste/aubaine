@@ -97,7 +97,14 @@ type BookingRow = { booking: Booking; slot: Slot; venue: Venue; offer: Offer; us
 const h = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const app = () => process.env.APP_URL ?? 'http://localhost:3000';
 
-const METHOD_LABEL: Record<string, string> = { bancontact: 'Bancontact', card: 'carte bancaire', link: 'Link', simulé: 'paiement simulé (phase de test)' };
+const METHOD_LABEL: Record<string, string> = {
+  bancontact: 'Bancontact',
+  card: 'carte bancaire',
+  apple_pay: 'Apple Pay',
+  google_pay: 'Google Pay',
+  link: 'Link',
+  simulé: 'paiement simulé (phase de test)',
+};
 export const paymentLabel = (m: string | null) => (m ? (METHOD_LABEL[m] ?? m) : 'paiement en ligne');
 
 /** Pied de page des emails aux clients */
@@ -136,7 +143,7 @@ const LEGAL_TEXT = (venue: Venue) =>
 /** Phrase de remboursement, selon le moyen de paiement */
 function refundText(booking: Booking, refunded: boolean): string {
   if (!refunded) return 'Rien n’avait été débité.';
-  return `${euros(booking.totalCents)} te sont remboursés sur ton ${paymentLabel(booking.paymentMethod)}${booking.paymentMethod === 'bancontact' ? ' : le virement arrive sur ton compte en 2 à 5 jours, sans forcément porter la mention « remboursement »' : ' : comptes quelques jours selon ta banque'}.`;
+  return `${euros(booking.totalCents)} te sont remboursés par ${paymentLabel(booking.paymentMethod)}${booking.paymentMethod === 'bancontact' ? ' : le virement arrive sur ton compte en 2 à 5 jours, sans forcément porter la mention « remboursement »' : ' : comptes quelques jours selon ta banque'}.`;
 }
 
 /** Confirmation envoyée dès que la réservation est payée (ou validée en paiement simulé), avec le billet en .ics */

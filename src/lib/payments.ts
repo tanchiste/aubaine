@@ -2,19 +2,40 @@ import 'server-only';
 import Stripe from 'stripe';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { bookings } from '@/db/schema';
+import { bookings, slots, venues } from '@/db/schema';
 import { getBooking, HOLD_MINUTES } from './bookings';
 import { bookingCancelledMail, bookingConfirmationMail, sendMail } from './email';
 import { notifyVenueBooking } from './notify';
 import { brusselsDate, capitalize, longDate, timeLabel } from './format';
 import { COMMISSION_PCT } from './pricing';
 
+/** L'établissement n'a pas (encore) de compte Stripe prêt à encaisser */
+export class NotPayableError extends Error {
+  constructor() {
+    super('Ce lieu n’accepte pas encore le paiement en ligne. Réessaie dans quelques jours.');
+  }
+}
+
+export const commissionOf = (totalCents: number) => Math.round((totalCents * COMMISSION_PCT) / 100);
+
 /**
  * Paiement en ligne avec Stripe Checkout : Bancontact et carte (Apple Pay et Google Pay compris).
  * Sans STRIPE_SECRET_KEY, l'app garde le paiement simulé de la phase de test.
- * Les fonds arrivent sur le compte Stripe d'Aubaine ; la commission est figée sur chaque réservation (fee_cents).
+ * Le paiement va au compte Stripe Connect de l'établissement (lib/connect.ts) : Aubaine prélève sa commission
+ * au passage (application fee) et paie les frais Stripe. La commission est aussi figée sur la réservation (fee_cents).
  */
 export const paymentsEnabled = () => !!process.env.STRIPE_SECRET_KEY;
+
+/** Avant d'ouvrir le paiement : l'établissement de ce créneau a-t-il un compte Stripe prêt ? */
+export async function slotPayable(slotId: string): Promise<boolean> {
+  if (!paymentsEnabled()) return true;
+  const [row] = await db
+    .select({ account: venues.stripeAccountId, ready: venues.stripeChargesEnabled })
+    .from(slots)
+    .innerJoin(venues, eq(venues.id, slots.venueId))
+    .where(eq(slots.id, slotId));
+  return !!row?.account && row.ready;
+}
 
 let client: Stripe | null = null;
 export function stripe(): Stripe {
@@ -39,18 +60,27 @@ export async function startCheckout(bookingId: string): Promise<string> {
   const row = await getBooking(bookingId);
   if (!row || row.booking.status !== 'pending') throw new Error('Réservation introuvable');
   const { booking, slot, venue, offer, user } = row;
+  const account = venue.stripeAccountId;
+  if (!account || !venue.stripeChargesEnabled) throw new NotPayableError();
   const when = `${capitalize(longDate(brusselsDate(slot.startsAt)))} à ${timeLabel(slot.startsAt)}`;
   const session = await stripe().checkout.sessions.create(
     {
       mode: 'payment',
       currency: 'eur',
       locale: 'fr',
-      // Bancontact et carte, parmi les moyens activés dans le tableau de bord Stripe
-      allowed_payment_method_types: ['bancontact', 'card'],
+      // Carte (Apple Pay et Google Pay compris) ; Bancontact dès que Stripe l'a activé pour ce lieu
+      allowed_payment_method_types: venue.stripeBancontact ? ['bancontact', 'card'] : ['card'],
       customer_email: user.email,
       client_reference_id: booking.id,
       metadata: { booking_id: booking.id, code: booking.code },
-      payment_intent_data: { description: `${venue.name} · ${when} · ${booking.code}`, metadata: { booking_id: booking.id, venue_id: venue.id } },
+      payment_intent_data: {
+        description: `${venue.name} · ${when} · ${booking.code}`,
+        metadata: { booking_id: booking.id, venue_id: venue.id },
+        // L'exploitant est le vendeur (son nom sur le relevé du client) et reçoit le montant, commission déduite
+        on_behalf_of: account,
+        transfer_data: { destination: account },
+        application_fee_amount: commissionOf(booking.totalCents),
+      },
       line_items: [
         {
           quantity: 1,
@@ -68,7 +98,7 @@ export async function startCheckout(bookingId: string): Promise<string> {
     },
     { idempotencyKey: `checkout-${booking.id}` },
   );
-  await db.update(bookings).set({ stripeSessionId: session.id }).where(eq(bookings.id, booking.id));
+  await db.update(bookings).set({ stripeSessionId: session.id, stripeAccountId: account }).where(eq(bookings.id, booking.id));
   if (!session.url) throw new Error('Stripe n’a pas renvoyé de page de paiement');
   return session.url;
 }
@@ -79,7 +109,11 @@ async function methodOf(paymentIntent: string | Stripe.PaymentIntent | null): Pr
   try {
     const pi = typeof paymentIntent === 'string' ? await stripe().paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] }) : paymentIntent;
     const charge = typeof pi.latest_charge === 'object' ? pi.latest_charge : null;
-    return { id: pi.id, method: charge?.payment_method_details?.type ?? pi.payment_method_types?.[0] ?? null };
+    const details = charge?.payment_method_details;
+    // Apple Pay et Google Pay passent par une carte : on garde le nom du portefeuille, plus parlant pour le client
+    const wallet = details?.type === 'card' ? details.card?.wallet?.type : null;
+    const method = wallet === 'apple_pay' || wallet === 'google_pay' ? wallet : (details?.type ?? pi.payment_method_types?.[0] ?? null);
+    return { id: pi.id, method };
   } catch {
     return { id: typeof paymentIntent === 'string' ? paymentIntent : paymentIntent.id, method: null };
   }
@@ -104,7 +138,7 @@ export async function settleSession(session: Stripe.Checkout.Session): Promise<{
       expiresAt: null,
       paymentMethod: method ?? 'card',
       stripePaymentIntent: intent,
-      feeCents: Math.round(((session.amount_total ?? 0) * COMMISSION_PCT) / 100),
+      feeCents: commissionOf(session.amount_total ?? 0),
     })
     .where(and(eq(bookings.id, bookingId), eq(bookings.status, 'pending'), eq(bookings.stripeSessionId, session.id)))
     .returning({ id: bookings.id });
@@ -115,7 +149,7 @@ export async function settleSession(session: Stripe.Checkout.Session): Promise<{
   // Déjà confirmée par l'autre chemin, ou réservation abandonnée entre-temps : dans ce cas, on rembourse.
   const row = await getBooking(bookingId);
   if (row?.booking.status === 'confirmed' || row?.booking.status === 'checked_in') return { bookingId, status: 'confirmed' };
-  if (row && intent) await refundPayment(intent, bookingId).catch((e) => console.error('[stripe] remboursement automatique', e));
+  if (row && intent) await refundPayment(intent, bookingId, row.booking.stripeAccountId).catch((e) => console.error('[stripe] remboursement automatique', e));
   return { bookingId, status: 'failed' };
 }
 
@@ -135,15 +169,22 @@ export async function releasePending(bookingId: string, sessionId?: string) {
   if (sessionId) await stripe().checkout.sessions.expire(sessionId).catch(() => {});
 }
 
-async function refundPayment(paymentIntent: string, bookingId: string) {
-  await stripe().refunds.create({ payment_intent: paymentIntent, metadata: { booking_id: bookingId } }, { idempotencyKey: `refund-${bookingId}` });
+/**
+ * Remboursement intégral. Pour un paiement versé à un établissement, le montant est repris sur son solde Stripe
+ * et la commission lui est rendue (pas de commission sur une réservation annulée).
+ */
+async function refundPayment(paymentIntent: string, bookingId: string, connected: string | null) {
+  await stripe().refunds.create(
+    { payment_intent: paymentIntent, metadata: { booking_id: bookingId }, ...(connected ? { reverse_transfer: true, refund_application_fee: true } : {}) },
+    { idempotencyKey: `refund-${bookingId}` },
+  );
 }
 
 /** Annulation par le client : remboursement intégral si le paiement est passé par Stripe */
 export async function refundBooking(bookingId: string): Promise<boolean> {
   const row = await getBooking(bookingId);
   if (!row?.booking.stripePaymentIntent) return false;
-  await refundPayment(row.booking.stripePaymentIntent, bookingId);
+  await refundPayment(row.booking.stripePaymentIntent, bookingId, row.booking.stripeAccountId);
   await db.update(bookings).set({ refundedAt: new Date() }).where(eq(bookings.id, bookingId));
   return true;
 }

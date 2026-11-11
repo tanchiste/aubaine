@@ -10,6 +10,7 @@ import { quote } from '@/lib/pricing';
 import { firstPhotos } from '@/lib/venues';
 import { getCurrentUser } from '@/lib/auth';
 import { paymentsEnabled } from '@/lib/payments';
+import { acceptsPayments } from '@/lib/connect';
 import { CANCEL_HOURS } from '@/lib/bookings-rules';
 import { BookForm } from './BookForm';
 
@@ -56,8 +57,18 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
       </dl>
       {sp.paiement === 'annule' && <p className="notice notice-amber" role="status">Paiement annulé : rien n’a été débité. Tu peux réessayer.</p>}
       {sp.paiement === 'echec' && <p className="notice notice-amber" role="alert">Le paiement n’a pas abouti : rien n’a été débité. Réessaie ou choisis un autre moyen.</p>}
-      {user ? (
-        <BookForm slotId={slot.id} people={n} total={euros(price.total)} needName={!user.firstName} online={paymentsEnabled()} cancelHours={CANCEL_HOURS} />
+      {!acceptsPayments(venue) ? (
+        <p className="notice notice-amber" role="status">Ce lieu n’accepte pas encore le paiement en ligne. Réessaie dans quelques jours.</p>
+      ) : user ? (
+        <BookForm
+          slotId={slot.id}
+          people={n}
+          total={euros(price.total)}
+          needName={!user.firstName}
+          online={paymentsEnabled()}
+          bancontact={venue.stripeBancontact}
+          cancelHours={CANCEL_HOURS}
+        />
       ) : (
         <div className="stack" style={{ ['--gap' as string]: '10px' }}>
           <Link className="btn btn-primary btn-lg btn-block" href={`/inscription?type=client&suite=${encodeURIComponent(`/reserver?slot=${slot.id}&n=${n}`)}`}>
@@ -71,7 +82,8 @@ export default async function BookingPage({ searchParams }: { searchParams: Prom
       )}
       <p className="small muted legal-line">
         Activité fournie par <b>{venue.legalName ?? venue.name}</b>
-        {venue.companyNumber ? `, n° d’entreprise ${venue.companyNumber}` : ''}. Aubaine prend la réservation et encaisse le paiement en son nom.
+        {venue.companyNumber ? `, n° d’entreprise ${venue.companyNumber}` : ''}
+        {paymentsEnabled() ? ', à qui ton paiement est versé via Stripe' : ''}. Aubaine prend la réservation en son nom.
       </p>
     </div>
   );

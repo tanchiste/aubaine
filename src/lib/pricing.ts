@@ -18,5 +18,5 @@ export function priceUnitLabel(v: Pick<Venue, 'priceUnit'>): string {
   return v.priceUnit === 'session' ? 'la séance' : 'par pers.';
 }
 
-/** Formule Découverte : commission prélevée sur chaque réservation honorée */
+/** Formule Découverte : commission prélevée sur chaque réservation payée (rendue si elle est annulée et remboursée) */
 export const COMMISSION_PCT = 15;

@@ -3,7 +3,23 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { bookAction, type BookState } from './actions';
 
-export function BookForm({ slotId, people, total, needName, online, cancelHours }: { slotId: string; people: number; total: string; needName: boolean; online: boolean; cancelHours: number }) {
+export function BookForm({
+  slotId,
+  people,
+  total,
+  needName,
+  online,
+  bancontact,
+  cancelHours,
+}: {
+  slotId: string;
+  people: number;
+  total: string;
+  needName: boolean;
+  online: boolean;
+  bancontact: boolean;
+  cancelHours: number;
+}) {
   const [state, action, pending] = useActionState<BookState, FormData>(bookAction, {});
   return (
     <form action={action} className="stack" style={{ ['--gap' as string]: '12px' }}>
@@ -25,7 +41,7 @@ export function BookForm({ slotId, people, total, needName, online, cancelHours 
       </button>
       {online ? (
         <div className="pay-methods">
-          <span className="pay-badge bancontact">Bancontact</span>
+          {bancontact && <span className="pay-badge bancontact">Bancontact</span>}
           <span className="pay-badge">Carte</span>
           <span className="pay-badge">Apple Pay</span>
           <span className="pay-badge">Google Pay</span>

@@ -6,7 +6,7 @@ import { IconBank, IconCheck, IconClock, IconGrid, IconHome, IconUsers } from '.
 const OWNER = [
   { href: '/pro', label: 'Tableau de bord', short: 'Tableau', Icon: IconGrid, exact: true },
   { href: '/pro/creneaux', label: 'Créneaux', short: 'Créneaux', Icon: IconClock },
-  { href: '/pro/paiements', label: 'Paiements', short: 'Paiements', Icon: IconBank, soon: true },
+  { href: '/pro/paiements', label: 'Paiements', short: 'Paiements', Icon: IconBank },
   { href: '/pro/etablissement', label: 'Établissement', short: 'Fiche', Icon: IconHome },
   { href: '/pro/equipe', label: 'Équipe', short: 'Équipe', Icon: IconUsers },
 ];
@@ -14,14 +14,14 @@ const STAFF = [{ href: '/pro', label: 'Accueil', short: 'Accueil', Icon: IconChe
 
 export function ProNav({ variant, role }: { variant: 'side' | 'tabs'; role: 'owner' | 'staff' }) {
   const path = usePathname();
-  // Sur mobile, les onglets « bientôt » sont masqués pour garder 4 entrées lisibles.
-  const items = (role === 'owner' ? OWNER : STAFF).filter((i) => variant === 'side' || !('soon' in i && i.soon));
+  // Sur mobile, un onglet « bientôt » serait masqué pour garder la barre lisible.
+  const items = (role === 'owner' ? OWNER : STAFF).filter((i) => variant === 'side' || !('soon' in i && i.soon === true));
   if (variant === 'tabs' && items.length < 2) return null;
   return (
     <nav className={variant === 'side' ? 'pro-nav' : 'pro-tabs'} aria-label="Navigation exploitant" style={variant === 'tabs' ? { gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` } : undefined}>
       {items.map((it) => {
         const { href, label, short, Icon } = it;
-        const soon = 'soon' in it && it.soon;
+        const soon = 'soon' in it && it.soon === true;
         const active = 'exact' in it && it.exact ? path === href : path.startsWith(href);
         return (
           <Link key={href} href={soon ? '#' : href} aria-current={active ? 'page' : undefined} aria-disabled={soon ? 'true' : undefined} title={soon ? 'Bientôt disponible' : undefined}>

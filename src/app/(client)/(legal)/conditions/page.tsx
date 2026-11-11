@@ -13,7 +13,7 @@ export default function Terms() {
     <>
       <DocHead title="Conditions d’utilisation et de réservation">
         <p>
-          <b>L’essentiel :</b> tu réserves une activité chez un exploitant, Aubaine encaisse le paiement pour lui. Le prix affiché est le prix final, TVA comprise. Tu peux annuler gratuitement
+          <b>L’essentiel :</b> tu réserves une activité chez un exploitant et tu le paies en ligne via Stripe, sur Aubaine. Le prix affiché est le prix final, TVA comprise. Tu peux annuler gratuitement
           jusqu’à {RULES.cancelHours} h avant et tu es remboursé en entier. Si l’exploitant annule, tu es aussi remboursé en entier.
         </p>
       </DocHead>
@@ -56,8 +56,8 @@ export default function Terms() {
       <ol>
         <li>Tu choisis un créneau et le nombre de personnes, puis tu vérifies le récapitulatif.</li>
         <li>
-          Tu paies par Bancontact ou carte bancaire, sur la page sécurisée de notre prestataire Stripe. Tes places sont gardées {RULES.holdMinutes} minutes pendant le paiement. Aubaine ne
-          voit jamais ton numéro de carte.
+          Tu paies par Bancontact, carte bancaire, Apple Pay ou Google Pay, sur la page sécurisée de notre prestataire Stripe. Le paiement est fait à l’exploitant, qui te fournit l’activité ;
+          Aubaine perçoit une commission de sa part, sans frais pour toi. Tes places sont gardées {RULES.holdMinutes} minutes pendant le paiement. Aubaine ne voit jamais ton numéro de carte.
         </li>
         <li>La réservation est conclue quand le paiement est confirmé. Tu reçois alors un email avec ton code, l’adresse, le détail du prix et un fichier pour ton agenda. Ton billet reste dans l’onglet Billets.</li>
         <li>À l’accueil, tu donnes ton code (ou montres ton billet). Respecte les conditions de l’exploitant indiquées sur sa fiche (âge minimum, tenue, ponctualité).</li>

@@ -379,12 +379,25 @@ export function checklist(v: Venue, photoCount: number, offerList: Offer[]): Che
       state: v.baseDiscountPct >= MIN_DISCOUNT && v.baseDiscountPct <= MAX_DISCOUNT ? 'ok' : 'ko',
       detail: `Entre −${MIN_DISCOUNT} % et −${MAX_DISCOUNT} %`,
     },
-    {
-      key: 'paiements',
-      label: 'Paiements',
-      state: 'info',
-      detail: 'Connexion du compte bancaire à venir (Stripe), non bloquant pour le moment',
-    },
+    // Paiements réels : le compte Stripe de l'établissement doit pouvoir encaisser avant la mise en ligne
+    process.env.STRIPE_SECRET_KEY
+      ? {
+          key: 'paiements',
+          label: 'Paiements activés',
+          state: v.stripeAccountId && v.stripeChargesEnabled ? 'ok' : 'ko',
+          detail:
+            v.stripeAccountId && v.stripeChargesEnabled
+              ? 'Compte bancaire relié via Stripe'
+              : v.stripeDetailsSubmitted
+                ? 'Stripe vérifie tes informations (page Paiements)'
+                : 'Relie ton compte bancaire dans Paiements (5 à 10 minutes chez Stripe)',
+        }
+      : {
+          key: 'paiements',
+          label: 'Paiements',
+          state: 'info',
+          detail: 'Paiement simulé pendant la phase de test : le compte bancaire se relie à l’ouverture des paiements',
+        },
   ];
 }
 

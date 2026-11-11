@@ -146,6 +146,18 @@ export const venues = pgTable(
     legalName: text('legal_name'),
     /** Numéro d'entreprise BCE, au format 0123.456.789 */
     companyNumber: text('company_number'),
+    /**
+     * Compte Stripe Connect de l'exploitant : les clients le paient directement, Aubaine prélève sa commission.
+     * L'état est recopié depuis Stripe (retour d'inscription et webhook account.updated).
+     */
+    stripeAccountId: text('stripe_account_id').unique(),
+    /** Carte, Apple Pay et Google Pay acceptés, versements possibles */
+    stripeChargesEnabled: boolean('stripe_charges_enabled').notNull().default(false),
+    stripePayoutsEnabled: boolean('stripe_payouts_enabled').notNull().default(false),
+    stripeBancontact: boolean('stripe_bancontact').notNull().default(false),
+    /** Formulaire Stripe terminé (même si Stripe vérifie encore) */
+    stripeDetailsSubmitted: boolean('stripe_details_submitted').notNull().default(false),
+    stripeCheckedAt: ts('stripe_checked_at'),
     /** données de démonstration, à supprimer avant le lancement */
     isDemo: boolean('is_demo').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
@@ -285,6 +297,8 @@ export const bookings = pgTable(
     paymentMethod: text('payment_method'),
     stripeSessionId: text('stripe_session_id').unique(),
     stripePaymentIntent: text('stripe_payment_intent'),
+    /** Compte Stripe de l'exploitant qui a reçu le paiement (vide : ancien paiement encaissé par Aubaine) */
+    stripeAccountId: text('stripe_account_id'),
     paidAt: ts('paid_at'),
     refundedAt: ts('refunded_at'),
     /** commission Aubaine figée au paiement */

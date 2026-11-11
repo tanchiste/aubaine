@@ -14,7 +14,6 @@ const SESSION_COOKIE = 'aub_session';
 const SESSION_DAYS = 30;
 const CODE_TTL_MIN = 10;
 const MAX_ATTEMPTS = 5;
-const MAX_CODES_PER_HOUR = 5;
 
 export type CurrentUser = { id: string; email: string; firstName: string | null; kind: AccountKind; isAdmin: boolean };
 
@@ -75,16 +74,6 @@ export async function requestLoginCode(rawEmail: string, signup?: SignupPayload)
   const keyMode = usesAdminKey(email);
   if (admin && !onScreen && !keyMode && !hasMailer())
     return { ok: false, error: 'Accès au back-office : ajoute ADMIN_KEY (12 caractères minimum) ou SMTP_URL dans Vercel.' };
-
-  const [{ n, oldest }] = await db
-    .select({ n: sql<number>`count(*)::int`, oldest: sql<string | null>`min(${loginCodes.createdAt})` })
-    .from(loginCodes)
-    .where(and(eq(loginCodes.email, email), gt(loginCodes.createdAt, sql`now() - interval '1 hour'`)));
-  if (n >= MAX_CODES_PER_HOUR) {
-    // Le plus ancien des codes de l'heure écoulée libère une place : on dit quand.
-    const wait = oldest ? Math.max(1, Math.ceil((new Date(oldest).getTime() + 3_600_000 - Date.now()) / 60_000)) : 60;
-    return { ok: false, error: `Trop de demandes pour cette adresse. Réessaie dans ${wait} min.` };
-  }
 
   const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
   const [row] = await db

@@ -51,8 +51,10 @@ type Result = { ok: true; devCode?: string; adminKey?: boolean } | { ok: false; 
 const codeOnScreen = (admin: boolean) => testMode() && (!admin || adminCodesOnScreen());
 
 /** Connexion admin avec la clé back-office : ni code à l'écran, ni service d'email configuré */
-const usesAdminKey = (email: string) =>
-  isAdminEmail(email) && !codeOnScreen(true) && !process.env.RESEND_API_KEY && adminKey() !== null;
+/** Un service d'envoi d'emails est configuré (SMTP ou Resend) */
+const hasMailer = () => !!process.env.SMTP_URL || !!process.env.RESEND_API_KEY;
+/** Sans service d'email, l'équipe Aubaine se connecte avec la clé ADMIN_KEY ; avec un service, elle reçoit son code par email */
+const usesAdminKey = (email: string) => isAdminEmail(email) && !codeOnScreen(true) && !hasMailer() && adminKey() !== null;
 
 /**
  * Envoie un code à 6 chiffres.
@@ -69,8 +71,8 @@ export async function requestLoginCode(rawEmail: string, signup?: SignupPayload)
   if (!signup && !existing && !admin) return { ok: false, error: 'Aucun compte avec cet email.', reason: 'no_account' };
   const onScreen = codeOnScreen(admin);
   const keyMode = usesAdminKey(email);
-  if (admin && !onScreen && !keyMode && !process.env.RESEND_API_KEY)
-    return { ok: false, error: 'Accès au back-office : ajoute ADMIN_KEY (12 caractères minimum) dans Vercel, ou RESEND_API_KEY.' };
+  if (admin && !onScreen && !keyMode && !hasMailer())
+    return { ok: false, error: 'Accès au back-office : ajoute ADMIN_KEY (12 caractères minimum) ou SMTP_URL dans Vercel.' };
 
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })

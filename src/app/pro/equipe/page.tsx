@@ -26,15 +26,16 @@ export default async function TeamPage() {
       </header>
       <section className="card" aria-label="Membres" style={{ padding: '4px 16px' }}>
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          {team.map((m, i) => (
-            <li key={m.id} className="row" style={{ padding: '12px 0', borderTop: i ? '1px solid var(--line-2)' : 0, flexWrap: 'wrap' }}>
+          {team.map((m) => (
+            <li key={m.id} className="member">
               <span aria-hidden="true" style={{ width: 38, height: 38, borderRadius: '50%', background: m.role === 'owner' ? 'var(--primary)' : 'var(--amber)', color: m.role === 'owner' ? '#fff' : 'var(--night)', display: 'grid', placeItems: 'center', fontWeight: 800 }}>
                 {(m.firstName ?? m.email).charAt(0).toUpperCase()}
               </span>
-              <span className="grow">
+              <span className="member-id">
                 <b style={{ fontSize: 14 }}>{[m.firstName, m.lastName].filter(Boolean).join(' ') || m.email}{m.id === user.id ? ' (toi)' : ''}</b>
-                <span className="small muted" style={{ display: 'block' }}>{m.email}</span>
+                <span className="small muted" title={m.email}>{m.email}</span>
               </span>
+              <span className="member-actions">
               <span className={`pill ${m.role === 'owner' ? 'pill-primary' : 'pill-amber'}`}>{m.role === 'owner' ? 'Gérant' : 'Accueil'}</span>
               <form action={toggleNotifyAction} className="notify-toggle">
                 <input type="hidden" name="userId" value={m.id} />
@@ -56,6 +57,7 @@ export default async function TeamPage() {
                   </form>
                 </span>
               )}
+              </span>
             </li>
           ))}
         </ul>

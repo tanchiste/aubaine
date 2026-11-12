@@ -23,7 +23,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="page-shell">
       <header className="admin-top">
-        <Logo dark href="/admin" suffix={<em className="small" style={{ fontStyle: 'normal', color: '#B9B4E0', marginLeft: 4 }}>Back-office</em>} />
+        <Logo dark href="/admin" suffix={<em className="small logo-suffix" style={{ fontStyle: 'normal', color: '#B9B4E0', marginLeft: 4 }}>Back-office</em>} />
         <AdminTabs pendingVenues={n} openReports={open} pendingPayouts={payoutsDue} />
         <span className="row small" style={{ marginLeft: 'auto', ['--gap' as string]: '16px', color: '#C9C5E6', whiteSpace: 'nowrap' }}>
           <a href="/" style={{ color: '#C9C5E6', fontWeight: 600 }}>Voir l’app</a>

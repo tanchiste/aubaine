@@ -74,9 +74,9 @@ export default async function ProLayout({ children }: { children: React.ReactNod
           <Logo dark href="/pro" />
           <span className="small" style={{ color: '#B9B4E0', fontWeight: 600 }}>Partenaire</span>
           <span className="grow" />
-          <span className="row" style={{ ['--gap' as string]: '8px', fontWeight: 700, fontSize: 14 }}>
+          <span className="row" style={{ ['--gap' as string]: '8px', fontWeight: 700, fontSize: 14, minWidth: 0 }}>
             <VenueArt className="swatch" color={current.venue.color} photoId={photoId} style={{ width: 26, height: 26 }} />
-            {current.venue.name}
+            <span className="ellipsis" style={{ maxWidth: '40vw' }}>{current.venue.name}</span>
           </span>
           {user.isAdmin && (
             <Link href="/admin" aria-label="Back-office Aubaine" style={{ color: 'var(--amber)', display: 'inline-grid', placeItems: 'center', width: 32, height: 32 }}>

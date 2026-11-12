@@ -11,7 +11,7 @@ export function InviteForm() {
   return (
     <form ref={form} action={action} className="card stack" aria-labelledby="inv-title">
       <h2 id="inv-title" style={{ fontSize: 16, fontWeight: 800 }}>Ajouter quelqu’un</h2>
-      <div className="grid-2">
+      <div className="grid-2 m-stack">
         <label className="field">
           <span>Email</span>
           <input className="input" type="email" name="email" required placeholder="prenom@exemple.be" />

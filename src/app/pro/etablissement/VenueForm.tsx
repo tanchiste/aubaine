@@ -40,7 +40,7 @@ export function VenueForm({ v, locked }: { v: VenueFormValues; locked: boolean }
             <span>Nom</span>
             <input className="input" name="name" defaultValue={v.name} required minLength={2} maxLength={60} />
           </label>
-          <div className="grid-2">
+          <div className="grid-2 m-stack">
             <label className="field">
               <span>Activité</span>
               <select className="select" name="category" defaultValue={v.category}>
@@ -54,7 +54,7 @@ export function VenueForm({ v, locked }: { v: VenueFormValues; locked: boolean }
               <input className="input" name="city" defaultValue={v.city} required maxLength={40} />
             </label>
           </div>
-          <div className="grid-2">
+          <div className="grid-2 m-stack">
             <label className="field">
               <span>Quartier <em className="hint" style={{ fontStyle: 'normal' }}>(facultatif)</em></span>
               <input className="input" name="area" defaultValue={v.area ?? ''} maxLength={40} placeholder="Ex. Jemappes" />
@@ -74,7 +74,7 @@ export function VenueForm({ v, locked }: { v: VenueFormValues; locked: boolean }
         <section className="card stack" aria-labelledby="f-legal">
           <h2 id="f-legal" style={{ fontSize: 15, fontWeight: 800 }}>Informations légales</h2>
           <p className="small muted">Affichées aux clients sur ta fiche et dans leur confirmation : la loi impose d’indiquer qui fournit la prestation.</p>
-          <div className="grid-2">
+          <div className="grid-2 m-stack">
             <label className="field">
               <span>Nom légal de l’exploitant</span>
               <input className="input" name="legalName" defaultValue={v.legalName ?? ''} maxLength={80} placeholder="Ex. Kart’Ohm SRL" autoComplete="organization" />

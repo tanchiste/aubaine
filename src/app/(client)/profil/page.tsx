@@ -83,7 +83,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         </span>
       </header>
 
-      <section className="kpis" aria-label="Mes sorties">
+      <section className="kpis kpis-short" aria-label="Mes sorties">
         <div className="kpi"><span>Sorties</span><b>{visits.length}</b></div>
         <div className="kpi"><span>Économisé</span><b>{euros(saved)}</b></div>
         <div className="kpi"><span>Points</span><b>{points}</b></div>
@@ -114,14 +114,14 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
                 <li key={b.booking.id} className="row" style={{ padding: '10px 0', borderTop: '1px solid var(--line-2)' }}>
                   <VenueArt className="swatch" color={b.venue.color} photoId={photos.get(b.venue.id)} style={{ width: 42, height: 42, borderRadius: 10 }} />
                   <span className="grow">
-                    <b style={{ fontSize: 14 }}>{b.venue.name}</b>
+                    <b className="ellipsis" style={{ fontSize: 14, display: 'block' }}>{b.venue.name}</b>
                     <span className="small muted" style={{ display: 'block' }}>
                       {longDate(brusselsDate(b.slot.startsAt))} · {b.booking.people} pers. · {euros(b.booking.totalCents)}
                     </span>
                   </span>
                   <span className="stack" style={{ alignItems: 'flex-end', ['--gap' as string]: '4px' }}>
                     <span className={`pill ${st.cls}`}>{st.label}</span>
-                    <Link className="small" href={`/lieu/${b.venue.slug}`} style={{ fontWeight: 700 }}>Réserver à nouveau</Link>
+                    <Link className="small" href={`/lieu/${b.venue.slug}`} style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Réserver à nouveau</Link>
                   </span>
                 </li>
               );

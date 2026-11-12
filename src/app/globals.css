@@ -59,7 +59,7 @@ a:hover { color: var(--primary-dark); }
   html:has(.pro-top), html:has(.pro-top) body,
   html:has(.admin-top), html:has(.admin-top) body { background: var(--night); }
 }
-.page-shell { min-height: 100dvh; background: var(--bg); }
+.page-shell { min-height: 100dvh; background: var(--bg); display: flow-root; }
 button, input, select, textarea { font: inherit; color: inherit; }
 img { display: block; max-width: 100%; }
 h1, h2, h3 { margin: 0; line-height: 1.2; }
@@ -70,6 +70,14 @@ p { margin: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .stack { display: flex; flex-direction: column; gap: var(--gap, 12px); }
 .row { display: flex; align-items: center; gap: var(--gap, 10px); }
+/* Une ligne par membre d'équipe : identité, puis rôle et actions (dessous sur téléphone) */
+.member { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 8px 12px; padding: 12px 0; }
+.member + .member { border-top: 1px solid var(--line-2); }
+.member-id > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-actions { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+@media (min-width: 640px) { .member { grid-template-columns: 38px minmax(0, 1fr) auto; } .member-actions { grid-column: auto; justify-content: flex-end; } }
+/* Texte sur une ligne, coupé par « … » s'il est trop long */
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .grow { flex: 1; min-width: 0; }
 .tnum { font-variant-numeric: tabular-nums; }
 
@@ -113,11 +121,17 @@ p { margin: 0; }
   background: var(--soft); font-size: 16px; color: var(--ink);
 }
 .textarea { height: auto; min-height: 110px; padding: 12px 14px; line-height: 1.45; resize: vertical; }
+/* iPhone : les champs date et heure gardent une largeur minimale native et sortent de leur colonne.
+   Sans l'apparence native, ils prennent la largeur de la colonne et la valeur s'aligne à gauche. */
+.input[type='date'], .input[type='time'] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; line-height: 45px; text-align: left; }
+.input[type='date']::-webkit-date-and-time-value, .input[type='time']::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px var(--primary-soft); }
 .hint { font-size: 12px; color: var(--muted); }
 .error { font-size: 13px; font-weight: 600; color: var(--deal-ink); }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* Paires de champs longs (adresse, email, nom légal) : une seule colonne sur téléphone */
+@media (max-width: 479px) { .grid-2.m-stack { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------- Cartes, pastilles ---------- */
 .card { background: var(--card); border-radius: 18px; padding: 16px; }
@@ -127,6 +141,7 @@ p { margin: 0; }
 }
 .deal.sm { font-size: 11px; padding: 4px 6px; border-radius: 6px; }
 .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.stack > .pill { align-self: flex-start; }
 .pill-ok { background: var(--ok-soft); color: #17694A; }
 .pill-deal { background: var(--deal-soft); color: var(--deal-ink); }
 .pill-amber { background: var(--amber-soft); color: #7A4A00; }
@@ -267,6 +282,11 @@ p { margin: 0; }
 .kpi { background: var(--card); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
 .kpi > span { font-size: 11px; font-weight: 700; line-height: 1.25; color: var(--muted); }
 .kpi b { font-family: var(--display); font-weight: 600; font-size: 20px; white-space: nowrap; }
+/* Montants en euros : trois colonnes ne tiennent pas sur téléphone */
+@media (max-width: 559px) {
+  .kpis:not(.kpis-short) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpis:not(.kpis-short) > .kpi:nth-child(3):last-child { grid-column: 1 / -1; }
+}
 .checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .checklist li { display: flex; gap: 12px; align-items: flex-start; padding: 11px 0; border-top: 1px solid var(--line-2); }
 .checklist li:first-child { border-top: 0; }
@@ -315,7 +335,9 @@ p { margin: 0; }
 }
 
 /* ---------- Back-office ---------- */
-.admin-top { height: 64px; padding: 0 24px; display: flex; align-items: center; gap: 28px; background: var(--night); color: #fff; overflow-x: auto; }
+.admin-top { height: 64px; padding: 0 24px; display: flex; align-items: center; gap: 28px; background: var(--night); color: #fff; overflow-x: auto; scrollbar-width: none; }
+.admin-top::-webkit-scrollbar { display: none; }
+@media (max-width: 640px) { .admin-top { padding: 0 16px; gap: 20px; } .admin-top .logo-suffix { display: none; } }
 .admin-tab { display: flex; align-items: center; gap: 8px; height: 64px; color: #C9C5E6; text-decoration: none; font-size: 14px; font-weight: 600; border-bottom: 3px solid transparent; white-space: nowrap; }
 .admin-tab:hover { color: #fff; }
 .admin-tab[aria-current='page'] { color: #fff; font-weight: 700; border-bottom-color: var(--amber); }

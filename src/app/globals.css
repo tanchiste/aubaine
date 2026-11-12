@@ -38,6 +38,18 @@ body {
 }
 a { color: var(--primary); }
 a:hover { color: var(--primary-dark); }
+
+/*
+ * iPhone (Safari 26) : la zone sous l'heure et la batterie affiche le fond de la page au-dessus du contenu,
+ * en flou. Sur les pages qui commencent par un bandeau nuit, ce fond passe en nuit pour prolonger le bandeau,
+ * au lieu d'un dégradé gris. Les conteneurs de page (.client, .pro, .page-shell) gardent leur fond clair.
+ */
+@media (max-width: 899px) {
+  html:has(.hero-band), html:has(.hero-band) body,
+  html:has(.pro-top), html:has(.pro-top) body,
+  html:has(.admin-top), html:has(.admin-top) body { background: var(--night); }
+}
+.page-shell { min-height: 100dvh; background: var(--bg); }
 button, input, select, textarea { font: inherit; color: inherit; }
 img { display: block; max-width: 100%; }
 h1, h2, h3 { margin: 0; line-height: 1.2; }
@@ -224,7 +236,7 @@ p { margin: 0; }
 .code-input { letter-spacing: 0.4em; font-size: 24px; font-weight: 800; text-align: center; height: 58px; }
 
 /* ---------- Espace exploitant ---------- */
-.pro { min-height: 100dvh; display: flex; }
+.pro { min-height: 100dvh; display: flex; background: var(--bg); }
 .pro-side { display: none; }
 .pro-main { flex: 1; min-width: 0; padding: 0 0 96px; }
 .pro-top { background: var(--night); color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 10px; }

@@ -1,3 +1,4 @@
+import type { Viewport } from 'next';
 import Link from 'next/link';
 import { Logo, VenueArt } from '@/components/ui';
 import { ProNav } from '@/components/ProNav';
@@ -8,6 +9,13 @@ import { firstPhotos } from '@/lib/venues';
 import { MiniFooter } from '@/components/SiteFooter';
 
 export const metadata = { title: 'Espace exploitant' };
+/** Barre du navigateur (Android, anciens iPhone) assortie au bandeau nuit sur téléphone */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(max-width: 899px)', color: '#17142E' },
+    { media: '(min-width: 900px)', color: '#F1F0F6' },
+  ],
+};
 
 export default async function ProLayout({ children }: { children: React.ReactNode }) {
   const { user, mine, current, role } = await getProContext();
@@ -15,7 +23,7 @@ export default async function ProLayout({ children }: { children: React.ReactNod
 
   if (!current) {
     return (
-      <div style={{ minHeight: '100dvh' }}>
+      <div className="page-shell">
         <header className="pro-top" style={{ display: 'flex' }}>
           <Logo dark href="/pro" suffix={<em className="small" style={{ fontStyle: 'normal', color: '#B9B4E0', marginLeft: 4 }}>Partenaire</em>} />
         </header>

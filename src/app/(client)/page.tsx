@@ -13,8 +13,17 @@ import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
 import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
+import type { Viewport } from 'next';
 import type { Venue } from '@/db/schema';
 import { bestDeals, cities, dayAvailability, explorer, lastMinute, minPrice, searchVenues, type DayAvailability } from '@/lib/venues';
+
+/** Barre du navigateur (Android, anciens iPhone) assortie au bandeau nuit sur téléphone */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(max-width: 899px)', color: '#17142E' },
+    { media: '(min-width: 900px)', color: '#F1F0F6' },
+  ],
+};
 
 type SP = Record<string, string | string[] | undefined>;
 

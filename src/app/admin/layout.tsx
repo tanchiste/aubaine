@@ -1,3 +1,4 @@
+import type { Viewport } from 'next';
 import { count, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { reports, venues } from '@/db/schema';
@@ -9,6 +10,8 @@ import { pendingPayoutCount } from '@/lib/payouts';
 import { AdminTabs } from './AdminTabs';
 
 export const metadata = { title: 'Back-office' };
+/** Barre du navigateur assortie au bandeau nuit du back-office */
+export const viewport: Viewport = { themeColor: '#17142E' };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const admin = await requireAdmin();
@@ -18,7 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     pendingPayoutCount(),
   ]);
   return (
-    <div style={{ minHeight: '100dvh' }}>
+    <div className="page-shell">
       <header className="admin-top">
         <Logo dark href="/admin" suffix={<em className="small" style={{ fontStyle: 'normal', color: '#B9B4E0', marginLeft: 4 }}>Back-office</em>} />
         <AdminTabs pendingVenues={n} openReports={open} pendingPayouts={payoutsDue} />

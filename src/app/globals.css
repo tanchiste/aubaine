@@ -375,7 +375,18 @@ p { margin: 0; }
 .sort a:hover { color: var(--ink); background: var(--card); }
 .sort a[aria-current='true'] { background: var(--primary-soft); color: var(--primary-dark); }
 .datepick { position: relative; flex: none; }
-.datepick-input { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+/* Champ date transparent posé sur son bouton : on le touche directement (seule façon fiable sur iPhone) */
+.datepick-input {
+  position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; padding: 0; border: 0;
+  opacity: 0; cursor: pointer; font-size: 16px; color: transparent; background: transparent; -webkit-appearance: none; appearance: none;
+}
+/* Ordinateur : l'icône du calendrier couvre tout le champ, un clic n'importe où l'ouvre */
+.datepick-input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
+.datepick:has(.datepick-input:focus-visible) > .day-cal, .datepick:has(.datepick-input:focus-visible) > .day-pill-cal,
+.qmenu-pick:has(.datepick-input:focus-visible) > .qmenu-item { outline: 3px solid #A99DFF; outline-offset: 2px; }
+.datepick:hover > .day-cal { border-color: var(--primary); }
+.qmenu-pick { position: relative; display: block; }
+.qmenu-pick:hover > .qmenu-item { background: var(--soft); }
 .day-cal { width: auto; min-width: 64px; padding: 0 10px; cursor: pointer; font: inherit; color: var(--primary); border-style: dashed; border-color: #C9C5DA; }
 .day-cal span { color: var(--primary); font-size: 12px; font-weight: 700; }
 .deals { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding: 2px 16px 4px; margin: 0 -16px; scroll-snap-type: x mandatory; }
@@ -571,13 +582,22 @@ p { margin: 0; }
   position: relative; background: var(--night); color: #fff;
   padding: 14px 16px 18px; border-radius: 0 0 26px 26px; display: flex; flex-direction: column; gap: 14px;
 }
-.hero-top { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; }
+.hero-top { position: relative; z-index: 5; display: none; align-items: center; justify-content: space-between; }
+/* Téléphone : barre nuit qui reste en haut (logo, ville) ; le bandeau commence juste dessous, sans rupture */
+.home-bar {
+  position: sticky; top: 0; z-index: 45; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px; background: var(--night); color: #fff;
+}
+.home-bar .logo span { color: #fff; }
+.home-bar .picker-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.22); color: #fff; }
+.home-bar .picker-btn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+@media (max-width: 899px) { .hero-band { padding-top: 6px; } }
 /* L'horloge est entière dans le bandeau ; le calque qui la contient ne coupe pas les menus déroulants */
 .hero-dial-clip { position: absolute; inset: 0; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .hero-copy { position: relative; z-index: 1; max-width: 66%; display: flex; flex-direction: column; gap: 8px; }
 .hero-band .explore-title { color: #fff; }
 .hero-live { font-size: 14px; font-weight: 600; color: #D6D2F2; }
-.hero-dial { position: absolute; z-index: 0; right: 16px; top: 64px; width: min(108px, 28vw); height: min(108px, 28vw); }
+.hero-dial { position: absolute; z-index: 0; right: 16px; top: 4px; width: min(108px, 28vw); height: min(108px, 28vw); }
 .hero-band .search { position: relative; z-index: 3; }
 .hero-band .search .input { background: #fff; border-color: #fff; }
 .hero-band .picker-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.22); color: #fff; }
@@ -589,6 +609,8 @@ p { margin: 0; }
 
 @media (min-width: 900px) {
   .hero-band { margin-top: 20px; border-radius: 28px; padding: 30px 36px 32px; gap: 18px; }
+  .home-bar { display: none; }
+  .hero-top { display: flex; }
   .hero-top { justify-content: flex-start; }
   .hero-band .picker-menu { left: 0; right: auto; }
   .hero-copy { max-width: 640px; }
@@ -627,7 +649,7 @@ p { margin: 0; }
 .qmenu { min-width: 220px; }
 .qmenu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; }
 .qmenu-item:hover, .qmenu-item[aria-selected='true'] { background: var(--soft); }
-.qmenu .datepick-input { position: absolute; left: 12px; bottom: 8px; width: 1px; height: 1px; }
+
 .qmenu-people { width: 232px; padding: 12px; }
 .people-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
 .picker-menu .people-grid a { justify-content: center; height: 42px; padding: 0; border-radius: 10px; background: var(--soft); font-family: var(--display); font-weight: 600; }
@@ -954,3 +976,11 @@ p { margin: 0; }
 .hbar-value { display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-size: 14px; white-space: nowrap; }
 .venue-map.admin-map { height: 380px; min-height: 0; border-radius: 16px; }
 @media (max-width: 640px) { .hbars li { grid-template-columns: 1fr auto; } .hbar-track { grid-column: 1 / -1; grid-row: 2; } }
+
+/* Bas de la liste d'Explorer : jours suivants chargés en descendant */
+.load-more { display: flex; justify-content: center; align-items: center; padding: 20px 16px 4px; text-align: center; }
+.load-more .btn { gap: 8px; }
+.load-more .btn[aria-busy='true'] { opacity: 0.75; }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }

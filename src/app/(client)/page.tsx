@@ -6,10 +6,11 @@ import { Deal, Logo, VenueArt } from '@/components/ui';
 import { HeroDial } from '@/components/brand';
 import { IconBolt, IconChevronRight, IconX } from '@/components/icons';
 import { SearchBox } from '@/components/SearchBox';
+import { LoadMore } from '@/components/LoadMore';
 import { LazyMap, type MapPin } from '@/components/LazyMap';
 import { DateMenu, PeopleMenu, SortMenu, TimeMenu } from '@/components/Menus';
 import { CATEGORIES, CATEGORY_KEYS, catStyle } from '@/lib/categories';
-import { addDays, brusselsDate, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
+import { addDays, brusselsDate, capitalize, dayChip, euros, longDate, relativeDay, timeLabel } from '@/lib/format';
 import { CITY_COOKIE, DAYS_AHEAD, MAX_DAYS, MAX_PEOPLE, MOMENTS, SORTS, clientParams, withParams, type Moment, type Sort } from '@/lib/params';
 import { discounted } from '@/lib/pricing';
 import { POS_COOKIE, distanceKm, distanceLabel, hasPos, parsePos } from '@/lib/geo';
@@ -26,6 +27,8 @@ export const viewport: Viewport = {
 };
 
 type SP = Record<string, string | string[] | undefined>;
+/** Jours ajoutés au plus en descendant (le jour affiché + 13 = deux semaines) */
+const MORE_DAYS = 13;
 
 export default async function ExplorerPage({ searchParams }: { searchParams: Promise<SP> }) {
   const raw = await searchParams;
@@ -86,6 +89,17 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     vue: mapView ? 'carte' : undefined,
   };
   const anyFilter = !!(category || q || hours || n !== 2 || sort !== defaultSort);
+
+  // En descendant, les jours suivants s'ajoutent à la liste (« plus » = nombre de jours ajoutés, deux semaines au plus)
+  const lastDay = addDays(today, MAX_DAYS - 1);
+  const plusAsked = Number(Array.isArray(raw.plus) ? raw.plus[0] : raw.plus);
+  const canGrow = !mapView && items.length > 0;
+  const extra = canGrow && Number.isInteger(plusAsked) ? Math.min(Math.max(plusAsked, 0), MORE_DAYS) : 0;
+  const extraDates = Array.from({ length: extra }, (_, i) => addDays(date, i + 1)).filter((d) => d <= lastDay);
+  const extraDays = await Promise.all(extraDates.map(async (d) => ({ day: d, list: await explorer({ ...filters, date: d, hours, sort, from: pos }) })));
+  const nextDay = addDays(date, extra + 1);
+  const moreHref = canGrow && extra < MORE_DAYS && nextDay <= lastDay ? withParams('/', base, { plus: extra + 1 }) : null;
+  const dayTitle = (d: string) => (d === addDays(today, 1) ? 'Demain' : capitalize(longDate(d)));
 
   // Rien trouvé : on teste ce qui donnerait des résultats en relâchant un filtre à la fois.
   const fixes: { key: string; label: string; href: string; n: number }[] = [];
@@ -160,11 +174,73 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
     };
   });
 
+  // Cartes des lieux d'un jour : liste principale et jours suivants chargés en descendant
+  const dateParam = (d: string) => (d !== today ? d : undefined);
+  const renderCards = (list: typeof items, d: string, first: boolean) => (
+    <div className="venue-grid">
+      {list.map(({ venue, photoId, slots }, i) => {
+        const best = Math.max(...slots.map((s) => s.discountPct));
+        const from = minPrice(slots);
+        const cheapest = slots.reduce((m, s) => (discounted(s.offer.priceCents, s.discountPct) < discounted(m.offer.priceCents, m.discountPct) ? s : m));
+        const shown = slots.slice(0, 3);
+        const link = withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: dateParam(d) });
+        return (
+          <article key={venue.id} className="venue-card">
+            <Link className="venue-link" href={link}>
+              <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category} priority={first && deals.length === 0 && i === 0}>
+                <Deal pct={best} />
+                <span className="cat-tag" style={catStyle(venue.category)}>{CATEGORIES[venue.category].short}</span>
+              </VenueArt>
+              <div className="body">
+                <div className="row" style={{ alignItems: 'flex-start' }}>
+                  <div className="grow stack" style={{ ['--gap' as string]: '2px', minWidth: 0 }}>
+                    <h3 style={{ fontSize: 17, fontWeight: 800 }}>{venue.name}</h3>
+                    <span className="small muted">
+                      {venue.area ? `${venue.area}, ` : ''}
+                      {venue.city}
+                      {kmTo(venue) !== null && <b className="km"> · {distanceLabel(kmTo(venue)!)}</b>}
+                    </span>
+                  </div>
+                  {/* Même lecture que les meilleurs deals : infos à gauche, prix remisé à droite avec le prix normal barré */}
+                  <div className="card-price" aria-label={`À partir de ${euros(from)} au lieu de ${euros(cheapest.offer.priceCents)}, ${cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par personne'}, remise comprise`}>
+                    <span>
+                      <span className="small muted">dès</span> <b className="num">{euros(from)}</b>
+                    </span>
+                    <span className="small muted">
+                      <s>{euros(cheapest.offer.priceCents)}</s> {cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Link>
+            <div className="mini-slots" style={{ padding: '0 14px 14px' }}>
+              {shown.map((s) => (
+                <Link prefetch={false} key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: dateParam(d), slot: s.id })}>
+                  {timeLabel(s.startsAt)} <em>−{s.discountPct} %</em>
+                </Link>
+              ))}
+              {slots.length > shown.length && (
+                <Link prefetch={false} className="mini-slot" href={link}>
+                  +{slots.length - shown.length}
+                </Link>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="explore">
+      {/* Téléphone : le logo et la ville restent en haut en descendant. Cette barre nuit fixée en haut
+          donne aussi sa couleur, sans flou, à la zone de l'heure et de la batterie sur iPhone. */}
+      <div className="home-bar">
+        <Logo dark />
+        <CityPicker cities={cityList} current={city} near={near} hasPos={!!pos} hrefFor={hrefFor} />
+      </div>
       <header className="hero-band">
         <div className="hero-top">
-          <span className="only-mobile"><Logo dark /></span>
           <CityPicker cities={cityList} current={city} near={near} hasPos={!!pos} hrefFor={hrefFor} />
         </div>
         <div className="hero-copy">
@@ -388,60 +464,30 @@ export default async function ExplorerPage({ searchParams }: { searchParams: Pro
             {pins.length < items.length && <p className="small muted">{items.length - pins.length} lieu{items.length - pins.length > 1 ? 'x' : ''} pas encore placé{items.length - pins.length > 1 ? 's' : ''} sur la carte.</p>}
           </div>
         ) : (
-          <div className="venue-grid">
-            {items.map(({ venue, photoId, slots }, i) => {
-              const best = Math.max(...slots.map((s) => s.discountPct));
-              const from = minPrice(slots);
-              const cheapest = slots.reduce((m, s) => (discounted(s.offer.priceCents, s.discountPct) < discounted(m.offer.priceCents, m.discountPct) ? s : m));
-              const shown = slots.slice(0, 3);
-              const link = withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined) });
-              return (
-                <article key={venue.id} className="venue-card">
-                  <Link className="venue-link" href={link}>
-                    <VenueArt color={venue.color} photoId={photoId} alt={venue.name} category={venue.category} priority={deals.length === 0 && i === 0}>
-                      <Deal pct={best} />
-                      <span className="cat-tag" style={catStyle(venue.category)}>{CATEGORIES[venue.category].short}</span>
-                    </VenueArt>
-                    <div className="body">
-                      <div className="row" style={{ alignItems: 'flex-start' }}>
-                        <div className="grow stack" style={{ ['--gap' as string]: '2px', minWidth: 0 }}>
-                          <h3 style={{ fontSize: 17, fontWeight: 800 }}>{venue.name}</h3>
-                          <span className="small muted">
-                            {venue.area ? `${venue.area}, ` : ''}
-                            {venue.city}
-                            {kmTo(venue) !== null && <b className="km"> · {distanceLabel(kmTo(venue)!)}</b>}
-                          </span>
-                        </div>
-                        {/* Même lecture que les meilleurs deals : infos à gauche, prix remisé à droite avec le prix normal barré */}
-                        <div className="card-price" aria-label={`À partir de ${euros(from)} au lieu de ${euros(cheapest.offer.priceCents)}, ${cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par personne'}, remise comprise`}>
-                          <span>
-                            <span className="small muted">dès</span> <b className="num">{euros(from)}</b>
-                          </span>
-                          <span className="small muted">
-                            <s>{euros(cheapest.offer.priceCents)}</s> {cheapest.offer.priceUnit === 'session' ? 'la séance' : 'par pers.'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                  <div className="mini-slots" style={{ padding: '0 14px 14px' }}>
-                    {shown.map((s) => (
-                      <Link prefetch={false} key={s.id} className={`mini-slot${s.discountPct > venue.baseDiscountPct ? ' boost' : ''}`} href={withParams(`/lieu/${venue.slug}`, { n: base.n, moment, de: p.de, a: p.a, date: base.date ?? (rolled ? date : undefined), slot: s.id })}>
-                        {timeLabel(s.startsAt)} <em>−{s.discountPct} %</em>
-                      </Link>
-                    ))}
-                    {slots.length > shown.length && (
-                      <Link prefetch={false} className="mini-slot" href={link}>
-                        +{slots.length - shown.length}
-                      </Link>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+          renderCards(items, date, true)
         )}
       </section>
+
+      {extraDays.map(({ day, list }) =>
+        list.length === 0 ? null : (
+          <section key={day} className="section" aria-labelledby={`jour-${day}`}>
+            <div className="section-title">
+              <h2 id={`jour-${day}`}>
+                {dayTitle(day)}
+                <span className="small muted" style={{ fontWeight: 500, marginLeft: 8 }}>
+                  {list.length} lieu{list.length > 1 ? 'x' : ''}
+                </span>
+              </h2>
+            </div>
+            {renderCards(list, day, false)}
+          </section>
+        ),
+      )}
+      {moreHref ? (
+        <LoadMore href={moreHref} label={`Voir ${nextDay === addDays(today, 1) ? 'demain' : dayTitle(nextDay).toLowerCase()}`} />
+      ) : (
+        extra > 0 && <p className="small muted load-more">C’est tout pour les deux prochaines semaines.</p>
+      )}
 
       {others.length > 0 && (
         <section className="section" aria-labelledby="others-title">

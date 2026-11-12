@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { startNavigation } from './NavProgress';
+import { openNativePicker } from './DatePicker';
 import { IconCheck, IconChevronDown, IconClock } from './icons';
 
 /** Ouvre / ferme un menu, et le referme au clic à côté ou avec Échap */
@@ -101,17 +102,6 @@ export function SortMenu({ options }: { options: { key: string; label: string; h
 export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pickHref, isToday, isTomorrow, todayInfo, tomorrowInfo }: { label: string; value: string; min: string; max: string; todayHref: string; tomorrowHref: string; pickHref: string; isToday: boolean; isTomorrow: boolean; todayInfo?: string; tomorrowInfo?: string }) {
   const { open, setOpen, ref } = usePopover();
   const router = useRouter();
-  const input = useRef<HTMLInputElement>(null);
-  const pick = () => {
-    const el = input.current;
-    if (!el) return;
-    try {
-      el.showPicker();
-    } catch {
-      el.focus();
-      el.click();
-    }
-  };
   return (
     <div className="picker" ref={ref}>
       <button type="button" className="qpill" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -137,25 +127,28 @@ export function DateMenu({ label, value, min, max, todayHref, tomorrowHref, pick
             </span>
             {isTomorrow && <IconCheck size={16} />}
           </Link>
-          <button type="button" className="qmenu-item" aria-selected={!isToday && !isTomorrow} onClick={pick}>
-            <span className="grow">{!isToday && !isTomorrow ? label : 'Choisir une date'}</span>
-            {!isToday && !isTomorrow ? <IconCheck size={16} /> : <IconChevronDown size={16} />}
-          </button>
-          <input
-            ref={input}
-            type="date"
-            className="datepick-input"
-            aria-label="Date"
-            min={min}
-            max={max}
-            defaultValue={value}
-            onChange={(e) => {
-              if (!e.target.value) return;
-              setOpen(false);
-              startNavigation();
-              router.push(pickHref.replace('__DATE__', e.target.value), { scroll: false });
-            }}
-          />
+          {/* Champ date transparent posé sur la ligne : sur iPhone, c'est le toucher qui ouvre le calendrier */}
+          <span className="qmenu-pick">
+            <span className="qmenu-item" aria-hidden="true" aria-selected={!isToday && !isTomorrow}>
+              <span className="grow">{!isToday && !isTomorrow ? label : 'Choisir une date'}</span>
+              {!isToday && !isTomorrow ? <IconCheck size={16} /> : <IconChevronDown size={16} />}
+            </span>
+            <input
+              type="date"
+              className="datepick-input"
+              aria-label="Choisir une date"
+              min={min}
+              max={max}
+              defaultValue={value}
+              onClick={openNativePicker}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                setOpen(false);
+                startNavigation();
+                router.push(pickHref.replace('__DATE__', e.target.value), { scroll: false });
+              }}
+            />
+          </span>
         </div>
       )}
     </div>

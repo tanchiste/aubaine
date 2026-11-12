@@ -60,7 +60,7 @@ try {
   ok((await client.locator('.venue-card').count()) > 0, 'Explorer affiche des établissements');
   await shot(client, '01-explorer');
   ok((await client.locator('.venue-card .cat-tag').count()) > 0, 'Chaque carte affiche son type d’activité');
-  await client.click('.picker-btn');
+  await client.click('.picker-btn:visible');
   const cityItems = await client.locator('.picker-menu a').all();
   let reachable = 0;
   for (const it of cityItems) {
@@ -168,7 +168,7 @@ try {
   const geo = await gctx.newPage();
   await geo.goto(`${BASE}/?ville=tout`);
   await settled(geo);
-  await geo.click('.picker-btn');
+  await geo.click('.picker-btn:visible');
   await geo.click('.picker-near');
   await geo.waitForURL((u) => u.searchParams.get('ville') === 'proche');
   await settled(geo);
@@ -378,6 +378,32 @@ try {
   const res2 = await partner.goto(`${BASE}/admin`);
   await settled(partner);
   ok(res2.status() === 404, 'Le back-office est fermé aux non-admins');
+
+  // Téléphone : barre du haut fixée, jours suivants en descendant, calendrier qui s'ouvre au toucher
+  const phone = await browser.newPage({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true });
+  await phone.goto(BASE + '/');
+  await settled(phone);
+  await phone.evaluate(() => window.scrollTo(0, 1200));
+  await phone.waitForTimeout(200);
+  ok((await phone.evaluate(() => Math.round(document.querySelector('.home-bar').getBoundingClientRect().top))) === 0, 'Téléphone : le logo et la ville restent en haut en descendant');
+  for (let i = 0; i < 4 && !(await phone.locator('h2[id^="jour-"]').count()); i++) {
+    await phone.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await phone.waitForTimeout(2500);
+  }
+  ok((await phone.locator('h2[id^="jour-"]').count()) > 0, `En descendant, les jours suivants s’ajoutent (${(await phone.locator('h2[id^="jour-"]').allTextContents()).map((t) => t.replace(/\d+ lieux?$/, '').trim()).join(', ')})`);
+  await phone.goto(BASE + '/lieu/kartohm');
+  await phone.locator('.datepick-input').first().waitFor();
+  const under = await phone.evaluate(() => {
+    const d = document.querySelector('.datepick');
+    d.scrollIntoView({ block: 'center' });
+    const r = d.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.className;
+  });
+  ok(under === 'datepick-input', 'Fiche : toucher « Autre date » touche le calendrier natif');
+  const later = new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10);
+  await phone.locator('.datepick-input').first().fill(later);
+  await phone.waitForURL((u) => u.searchParams.get('date') === later);
+  ok(true, 'Fiche : la date choisie s’affiche');
   console.log('\nTout est bon.');
 } finally {
   await browser.close();
